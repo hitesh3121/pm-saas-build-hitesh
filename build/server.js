@@ -41,8 +41,6 @@ app.use(passport.session());
 app.use(cookieParser());
 // Helmet configuration
 app.use(helmet());
-//File upload
-app.use(fileUpload());
 // JSON data handling
 app.use(express.json());
 app.set("json spaces", 2);
@@ -51,7 +49,7 @@ app.use("/api/auth", AuthRoutes);
 app.use("/api/user", authMiddleware, UserRoutes);
 app.use("/api/organisation", authMiddleware, OrganisationRoutes);
 app.use("/api/project", authMiddleware, ProjectRoutes);
-app.use("/api/task", authMiddleware, TaskRoutes);
+app.use("/api/task", fileUpload(), authMiddleware, TaskRoutes);
 app.get("/", async (req, res) => {
     return res.status(200).send({ ok: true });
 });
