@@ -13,7 +13,6 @@ export const ProjectStatusEnumValue = {
 export const TaskDependenciesEnumValue = {
     BLOCKING: 'BLOCKING',
     WAITING_ON: 'WAITING_ON',
-    NO_DEPENDENCIES: "NO_DEPENDENCIES"
 };
 export const TaskStatusEnumValue = {
     NOT_STARTED: 'NOT_STARTED',
@@ -32,4 +31,10 @@ export const UserRoleEnumValue = {
 };
 export const ZodErrorMessageEnumValue = {
     REQUIRED: 'Required*'
+};
+export const OverAllTrackEnumValue = {
+    CLOUDY: "CLOUDY",
+    RAINY: "RAINY",
+    STORMY: "STORMY",
+    SUNNY: "SUNNY"
 };

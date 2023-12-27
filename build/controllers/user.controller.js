@@ -1,19 +1,22 @@
 import { getClientByTenantId } from "../config/db.js";
-import { BadRequestError, InternalServerError, NotFoundError, SuccessResponse } from "../config/apiError.js";
+import { BadRequestError, InternalServerError, NotFoundError, SuccessResponse, UnAuthorizedError } from "../config/apiError.js";
 import { StatusCodes } from "http-status-codes";
-import { userUpdateSchema, userOrgSettingsUpdateSchema, avatarImgSchema, } from "../schemas/userSchema.js";
+import { userUpdateSchema, userOrgSettingsUpdateSchema, avatarImgSchema, changePasswordSchema, } from "../schemas/userSchema.js";
 import { uuidSchema } from "../schemas/commonSchema.js";
 import { verifyEmailOtpSchema } from "../schemas/authSchema.js";
 import { EmailService } from "../services/email.services.js";
 import { OtpService } from "../services/userOtp.services.js";
 import { generateOTP } from "../utils/otpHelper.js";
 import { AwsUploadService } from "../services/aws.services.js";
+import { compareEncryption, encrypt } from "../utils/encryption.js";
+import { UserProviderTypeEnum } from "@prisma/client";
 export const me = async (req, res) => {
     const prisma = await getClientByTenantId(req.tenantId);
     const user = await prisma.user.findUniqueOrThrow({
         where: { userId: req.userId },
         include: {
             userOrganisation: { include: { organisation: true } },
+            provider: { select: { providerType: true } }
         },
     });
     return new SuccessResponse(StatusCodes.OK, user, "Login user details").send(res);
@@ -103,4 +106,35 @@ export const resendOTP = async (req, res) => {
     }
     ;
     return new SuccessResponse(StatusCodes.OK, null, 'Resend OTP successfully').send(res);
+};
+export const changePassword = async (req, res) => {
+    const { oldPassword, password } = changePasswordSchema.parse(req.body);
+    const prisma = await getClientByTenantId(req.tenantId);
+    const findUser = await prisma.user.findUniqueOrThrow({
+        where: {
+            userId: req.userId,
+            provider: {
+                providerType: UserProviderTypeEnum.EMAIL,
+            },
+        },
+        include: { provider: true },
+    });
+    const verifyPassword = await compareEncryption(oldPassword, findUser?.provider?.idOrPassword);
+    if (!verifyPassword) {
+        throw new UnAuthorizedError();
+    }
+    const hashedPassword = await encrypt(password);
+    await prisma.user.update({
+        data: {
+            provider: {
+                update: {
+                    idOrPassword: hashedPassword,
+                },
+            },
+        },
+        where: {
+            userId: req.userId,
+        },
+    });
+    return new SuccessResponse(StatusCodes.OK, null, "Change password successfully").send(res);
 };

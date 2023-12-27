@@ -22,6 +22,8 @@ import fileUpload from "express-fileupload";
 const app = express();
 // compression
 // app.use(compression());
+// File-upload
+app.use(fileUpload());
 // Morgan
 app.use(morgan(":method \x1b[32m:url\x1b[0m :status \x1b[36m(:response-time ms)\x1b[0m - \x1b[35m:res[content-length] :res[compressed-size] \x1b[0m"));
 app.use(session({
@@ -49,7 +51,7 @@ app.use("/api/auth", AuthRoutes);
 app.use("/api/user", authMiddleware, UserRoutes);
 app.use("/api/organisation", authMiddleware, OrganisationRoutes);
 app.use("/api/project", authMiddleware, ProjectRoutes);
-app.use("/api/task", fileUpload(), authMiddleware, TaskRoutes);
+app.use("/api/task", authMiddleware, TaskRoutes);
 app.get("/", async (req, res) => {
     return res.status(200).send({ ok: true });
 });

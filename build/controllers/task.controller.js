@@ -51,6 +51,11 @@ export const getTaskById = async (req, res) => {
             },
             documentAttachments: true,
             subtasks: true,
+            dependencies: {
+                include: {
+                    dependentOnTask: true
+                }
+            }
         },
     });
     const finalResponse = { ...task };
@@ -95,7 +100,8 @@ export const createTask = async (req, res) => {
         },
         include: {
             documentAttachments: true,
-            assignedUsers: true
+            assignedUsers: true,
+            dependencies: true
         },
     });
     const finalResponse = { ...task };
@@ -121,7 +127,11 @@ export const updateTask = async (req, res) => {
             ...taskUpdateValue,
             updatedByUserId: req.userId,
         },
-        include: { documentAttachments: true, assignedUsers: true },
+        include: {
+            documentAttachments: true,
+            assignedUsers: true,
+            dependencies: true,
+        },
     });
     const finalResponse = { ...taskUpdateDB };
     return new SuccessResponse(StatusCodes.OK, finalResponse, "task updated successfully").send(res);
@@ -136,7 +146,12 @@ export const deleteTask = async (req, res) => {
     if (taskId && await prisma.task.findFirstOrThrow({ where: { taskId: taskId } })) {
         await prisma.task.delete({
             where: { taskId },
-            include: { comments: true, documentAttachments: true, subtasks: true }
+            include: {
+                comments: true,
+                documentAttachments: true,
+                subtasks: true,
+                dependencies: true,
+            }
         });
         return new SuccessResponse(StatusCodes.OK, null, 'task deleted successfully').send(res);
     }
@@ -309,24 +324,35 @@ export const deleteMemberFromTask = async (req, res) => {
     });
     return new SuccessResponse(StatusCodes.OK, null, "Member deleted successfully").send(res);
 };
-export const addOrRemoveDependencies = async (req, res) => {
+export const addDependencies = async (req, res) => {
     if (!req.userId) {
         throw new BadRequestError('userId not found!!');
     }
     ;
     const taskId = uuidSchema.parse(req.params.taskId);
-    const { dependencies, dependantTaskId } = dependenciesTaskSchema.parse(req.body);
+    const { dependentType, dependendentOnTaskId } = dependenciesTaskSchema.parse(req.body);
     const prisma = await getClientByTenantId(req.tenantId);
-    const addDependencies = await prisma.task.update({
+    const addDependencies = await prisma.taskDependencies.create({
         data: {
-            dependencies: dependencies,
-            dependantTaskId: dependantTaskId
-        },
-        where: {
-            taskId: taskId,
+            dependentType: dependentType,
+            dependentTaskId: taskId,
+            dependendentOnTaskId: dependendentOnTaskId,
         },
     });
-    return new SuccessResponse(StatusCodes.OK, addDependencies, "Dependencies updated successfully").send(res);
+    return new SuccessResponse(StatusCodes.OK, addDependencies, "Dependencies added successfully").send(res);
+};
+export const removeDependencies = async (req, res) => {
+    if (!req.userId) {
+        throw new BadRequestError("userId not found!!");
+    }
+    const taskDependenciesId = uuidSchema.parse(req.params.taskDependenciesId);
+    const prisma = await getClientByTenantId(req.tenantId);
+    await prisma.taskDependencies.delete({
+        where: {
+            taskDependenciesId: taskDependenciesId,
+        },
+    });
+    return new SuccessResponse(StatusCodes.OK, null, "Dependencies removed successfully").send(res);
 };
 export const addOrRemoveMilesstone = async (req, res) => {
     if (!req.userId) {

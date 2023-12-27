@@ -10,6 +10,11 @@ export const authSignUpSchema = z
         .regex(/^(?=.*[!@#$%^&*(),.?":{}|<>])(?=.*[A-Z])(?=.*[0-9]).{8,}$/, "Must contain 8+ chars, 1 uppercase, 1 lowercase, 1 number and 1 special chars.")
         .min(1, "Password is a required field"),
     confirmPassword: z.string({ required_error: ZodErrorMessageEnumValue.REQUIRED }),
+    privacyPolicy: z.boolean().refine((v) => {
+        if (v == true) {
+            return true;
+        }
+    }),
 })
     .refine((values) => {
     if (!values.password)
