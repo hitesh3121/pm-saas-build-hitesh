@@ -220,3 +220,8 @@ export const resetPassword = async (req, res) => {
     });
     return new SuccessResponse(StatusCodes.OK, null, "Reset password successfully").send(res);
 };
+export const logout = (req, res) => {
+    res.clearCookie(settings.jwt.tokenCookieKey);
+    res.clearCookie(settings.jwt.refreshTokenCookieKey);
+    return new SuccessResponse(StatusCodes.OK, null, "Logout successfully").send(res);
+};

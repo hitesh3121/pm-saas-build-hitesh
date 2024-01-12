@@ -35,3 +35,15 @@ export const addOrganisationMemberSchema = z.object({
         message: "Only team member and project manager role allowed",
     }),
 });
+export const organisationStatuSchema = z.object({
+    status: z.nativeEnum(OrgStatusEnumValue),
+});
+export const memberRoleSchema = z.object({
+    role: z.nativeEnum(UserRoleEnumValue).refine((value) => {
+        return (value in UserRoleEnumValue &&
+            (value === UserRoleEnumValue.PROJECT_MANAGER ||
+                value === UserRoleEnumValue.TEAM_MEMBER));
+    }, {
+        message: "Only team member and project manager roles are allowed",
+    }),
+});

@@ -9,7 +9,7 @@ import { OtpService } from "../services/userOtp.services.js";
 import { generateOTP } from "../utils/otpHelper.js";
 import { AwsUploadService } from "../services/aws.services.js";
 import { compareEncryption, encrypt } from "../utils/encryption.js";
-import { UserProviderTypeEnum } from "@prisma/client";
+import { OrgStatusEnum, UserStatusEnum, UserProviderTypeEnum } from "@prisma/client";
 export const me = async (req, res) => {
     const prisma = await getClientByTenantId(req.tenantId);
     const user = await prisma.user.findUniqueOrThrow({
@@ -19,6 +19,15 @@ export const me = async (req, res) => {
             provider: { select: { providerType: true } }
         },
     });
+    if (user?.status === UserStatusEnum.INACTIVE) {
+        throw new BadRequestError('User is DEACTIVE');
+    }
+    if (user.userOrganisation.length > 0) {
+        const organisation = user.userOrganisation[0]?.organisation;
+        if (organisation?.status === OrgStatusEnum.DEACTIVE) {
+            throw new BadRequestError("Organisation is DEACTIVE");
+        }
+    }
     return new SuccessResponse(StatusCodes.OK, user, "Login user details").send(res);
 };
 export const updateUserProfile = async (req, res) => {
