@@ -42,16 +42,23 @@ export const loginConsole = async (req, res) => {
             tenantId: req.tenantId ?? "root",
         };
         const token = createJwtToken(tokenPayload);
+        res.cookie(settings.jwt.tokenCookieKey, token, {
+            maxAge: 1 * 24 * 60 * 60 * 1000,
+            httpOnly: false,
+            secure: true,
+            sameSite: 'none',
+            domain: settings.domain
+        });
         const refreshToken = createJwtToken(tokenPayload, true);
         res.cookie(settings.jwt.refreshTokenCookieKey, refreshToken, {
             maxAge: 7 * 24 * 60 * 60 * 1000,
-            httpOnly: true,
+            httpOnly: false,
             secure: true,
             sameSite: 'none',
             domain: settings.domain
         });
         const { password, ...infoWithoutPassword } = user;
-        return new SuccessResponse(StatusCodes.OK, { user: infoWithoutPassword, token }, "Login successfully").send(res);
+        return new SuccessResponse(StatusCodes.OK, { user: infoWithoutPassword }, "Login successfully").send(res);
     }
     throw new UnAuthorizedError();
 };
@@ -83,7 +90,7 @@ export const changePassword = async (req, res) => {
     return new SuccessResponse(StatusCodes.OK, withoutPassword, "Change password successfully").send(res);
 };
 export const createSuperAdmin = async (req, res) => {
-    const prisma = await getClientByTenantId(req.tenantId);
+    const prisma = await getClientByTenantId("root");
     const { firstName, lastName, email, password } = req.body;
     const hashedPassword = await encrypt(password);
     await prisma.consoleUser.create({
