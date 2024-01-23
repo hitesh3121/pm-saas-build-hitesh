@@ -13,6 +13,7 @@ import { uuidSchema } from "../schemas/commonSchema.js";
 import { organisationStatuSchema } from "../schemas/organisationSchema.js";
 import { ZodError } from "zod";
 import { AwsUploadService } from "../services/aws.services.js";
+import { cookieConfig } from "../utils/setCookies.js";
 export const me = async (req, res) => {
     const prisma = await getClientByTenantId(req.tenantId);
     const user = await prisma.consoleUser.findUniqueOrThrow({
@@ -42,20 +43,14 @@ export const loginConsole = async (req, res) => {
             tenantId: req.tenantId ?? "root",
         };
         const token = createJwtToken(tokenPayload);
-        res.cookie(settings.jwt.tokenCookieKey, token, {
-            maxAge: 1 * 24 * 60 * 60 * 1000,
-            httpOnly: false,
-            secure: true,
-            sameSite: 'none',
-            domain: settings.domain
-        });
         const refreshToken = createJwtToken(tokenPayload, true);
+        res.cookie(settings.jwt.tokenCookieKey, token, {
+            ...cookieConfig,
+            maxAge: cookieConfig.maxAgeToken
+        });
         res.cookie(settings.jwt.refreshTokenCookieKey, refreshToken, {
-            maxAge: 7 * 24 * 60 * 60 * 1000,
-            httpOnly: false,
-            secure: true,
-            sameSite: 'none',
-            domain: settings.domain
+            ...cookieConfig,
+            maxAge: cookieConfig.maxAgeRefreshToken
         });
         const { password, ...infoWithoutPassword } = user;
         return new SuccessResponse(StatusCodes.OK, { user: infoWithoutPassword }, "Login successfully").send(res);

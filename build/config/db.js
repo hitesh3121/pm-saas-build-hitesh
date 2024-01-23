@@ -143,28 +143,23 @@ function generatePrismaClient(datasourceUrl) {
                         },
                     });
                 },
-                async calculationSubTaskProgression(taskId) {
-                    const hours = 24;
-                    const parentTask = await client.task.findFirst({
-                        where: { taskId },
-                        include: {
-                            subtasks: true,
-                        },
-                    });
-                    if (parentTask &&
-                        !parentTask.parentTaskId &&
-                        (parentTask?.subtasks).length > 0) {
+                calculationSubTaskProgression(task) {
+                    if (task.subtasks && task.subtasks.length > 0) {
+                        const hours = 24;
                         let completionPecentageOrDurationTask = 0;
                         let averagesSumOfDurationTask = 0;
-                        for (const value of parentTask.subtasks) {
+                        for (const value of task.subtasks) {
+                            const percentage = client.task.calculationSubTaskProgression(value);
                             completionPecentageOrDurationTask +=
-                                Number(value.completionPecentage) * (value.duration * hours);
+                                Number(percentage) * (value.duration * hours);
                             averagesSumOfDurationTask += value.duration * hours * 100;
                         }
-                        return (completionPecentageOrDurationTask / averagesSumOfDurationTask);
+                        return ((completionPecentageOrDurationTask / averagesSumOfDurationTask) *
+                            100);
                     }
-                    else
-                        return Number(parentTask?.completionPecentage);
+                    else {
+                        return task.completionPecentage;
+                    }
                 },
                 async calculateSubTask(startingTaskId) {
                     let currentTaskId = startingTaskId;

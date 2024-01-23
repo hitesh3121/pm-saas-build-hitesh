@@ -28,9 +28,26 @@ export const getTasks = async (req, res) => {
                     }
                 }
             },
+            subtasks: {
+                include: {
+                    subtasks: {
+                        include: {
+                            subtasks: true,
+                        },
+                    },
+                },
+            },
         },
     });
-    return new SuccessResponse(StatusCodes.OK, tasks, 'get all task successfully').send(res);
+    const finalArray = tasks.map((task) => {
+        const updatedTask = {
+            ...task,
+            completionPecentage: prisma.task
+                .calculationSubTaskProgression(task)
+        };
+        return updatedTask;
+    });
+    return new SuccessResponse(StatusCodes.OK, finalArray, 'get all task successfully').send(res);
 };
 export const getTaskById = async (req, res) => {
     const taskId = uuidSchema.parse(req.params.taskId);
@@ -87,17 +104,6 @@ export const getTaskById = async (req, res) => {
             },
         },
     });
-    // Handle completionPercentage DB 
-    if (task && task.subtasks.length > 0) {
-        const completionPercentage = await prisma.task.calculationSubTaskProgression(taskId);
-        await prisma.task.update({
-            where: { taskId },
-            data: {
-                completionPecentage: completionPercentage,
-            },
-        });
-        task.completionPecentage = completionPercentage;
-    }
     const finalResponse = { ...task };
     return new SuccessResponse(StatusCodes.OK, finalResponse, "task selected").send(res);
 };

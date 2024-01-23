@@ -13,6 +13,7 @@ import { generateOTP } from "../utils/otpHelper.js";
 import { EmailService } from "../services/email.services.js";
 import { OtpService } from "../services/userOtp.services.js";
 import { generateRandomToken } from "../utils/generateRandomToken.js";
+import { cookieConfig } from "../utils/setCookies.js";
 export const signUp = async (req, res) => {
     const { firstName, lastName, email, password } = authSignUpSchema.parse(req.body);
     try {
@@ -51,18 +52,12 @@ export const signUp = async (req, res) => {
             console.error("Failed to send email", error);
         }
         res.cookie(settings.jwt.tokenCookieKey, token, {
-            maxAge: 1 * 24 * 60 * 60 * 1000,
-            httpOnly: false,
-            secure: true,
-            sameSite: 'none',
-            domain: settings.domain
+            ...cookieConfig,
+            maxAge: cookieConfig.maxAgeToken
         });
         res.cookie(settings.jwt.refreshTokenCookieKey, refreshToken, {
-            maxAge: 7 * 24 * 60 * 60 * 1000,
-            httpOnly: false,
-            secure: true,
-            sameSite: 'none',
-            domain: settings.domain
+            ...cookieConfig,
+            maxAge: cookieConfig.maxAgeRefreshToken
         });
         return new SuccessResponse(StatusCodes.CREATED, user, "Sign up successfully").send(res);
     }
@@ -99,19 +94,13 @@ export const login = async (req, res) => {
         };
         const token = createJwtToken(tokenPayload);
         res.cookie(settings.jwt.tokenCookieKey, token, {
-            maxAge: 1 * 24 * 60 * 60 * 1000,
-            httpOnly: false,
-            secure: true,
-            sameSite: 'none',
-            domain: settings.domain
+            ...cookieConfig,
+            maxAge: cookieConfig.maxAgeToken
         });
         const refreshToken = createJwtToken(tokenPayload, true);
         res.cookie(settings.jwt.refreshTokenCookieKey, refreshToken, {
-            maxAge: 7 * 24 * 60 * 60 * 1000,
-            httpOnly: false,
-            secure: true,
-            sameSite: 'none',
-            domain: settings.domain
+            ...cookieConfig,
+            maxAge: cookieConfig.maxAgeRefreshToken
         });
         const { provider, ...userWithoutProvider } = user;
         return new SuccessResponse(StatusCodes.OK, { user: userWithoutProvider }, "Login successfully").send(res);
@@ -128,19 +117,13 @@ export const getAccessToken = (req, res) => {
     };
     const token = createJwtToken(tokenPayload);
     res.cookie(settings.jwt.tokenCookieKey, token, {
-        maxAge: 1 * 24 * 60 * 60 * 1000,
-        httpOnly: false,
-        secure: true,
-        sameSite: 'none',
-        domain: settings.domain
+        ...cookieConfig,
+        maxAge: cookieConfig.maxAgeToken
     });
     const refreshToken = createJwtToken(tokenPayload, true);
     res.cookie(settings.jwt.refreshTokenCookieKey, refreshToken, {
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-        httpOnly: false,
-        secure: true,
-        sameSite: 'none',
-        domain: settings.domain
+        ...cookieConfig,
+        maxAge: cookieConfig.maxAgeRefreshToken
     });
     return new SuccessResponse(StatusCodes.OK, null, "Access token retrived successfully").send(res);
 };
