@@ -1,8 +1,8 @@
 import { getClientByTenantId } from '../config/db.js';
 import { BadRequestError, NotFoundError, SuccessResponse } from '../config/apiError.js';
 import { StatusCodes } from 'http-status-codes';
-import { createKanbanSchema, createProjectSchema, projectIdSchema, projectStatusSchema, updateKanbanSchema, updateProjectSchema } from '../schemas/projectSchema.js';
-import { ProjectStatusEnum, TaskStatusEnum } from '@prisma/client';
+import { consumedBudgetSchema, createKanbanSchema, createProjectSchema, projectIdSchema, projectStatusSchema, updateKanbanSchema, updateProjectSchema } from '../schemas/projectSchema.js';
+import { ProjectStatusEnum, TaskStatusEnum, UserRoleEnum } from '@prisma/client';
 import { uuidSchema } from '../schemas/commonSchema.js';
 export const getProjects = async (req, res) => {
     if (!req.organisationId) {
@@ -30,7 +30,27 @@ export const getProjects = async (req, res) => {
     const projectsWithProgression = [];
     for (const project of projects) {
         const progressionPercentage = await prisma.project.projectProgression(project.projectId);
-        const projectWithProgression = { ...project, progressionPercentage };
+        const projectManagerInfo = await prisma.userOrganisation.findMany({
+            where: {
+                organisationId: req.organisationId,
+                role: UserRoleEnum.PROJECT_MANAGER,
+            },
+            select: {
+                user: {
+                    select: {
+                        firstName: true,
+                        lastName: true,
+                        email: true,
+                        avatarImg: true,
+                    },
+                },
+            },
+        });
+        const projectWithProgression = {
+            ...project,
+            progressionPercentage,
+            projectManagerInfo,
+        };
         projectsWithProgression.push(projectWithProgression);
     }
     return new SuccessResponse(StatusCodes.OK, projectsWithProgression, 'get all project successfully').send(res);
@@ -78,6 +98,7 @@ export const createProject = async (req, res) => {
             projectDescription: projectDescription,
             startDate: startDate,
             estimatedEndDate: estimatedEndDate,
+            actualEndDate: estimatedEndDate,
             status: ProjectStatusEnum.NOT_STARTED,
             estimatedBudget: estimatedBudget,
             defaultView: defaultView,
@@ -222,4 +243,19 @@ export const deleteKanbanColumn = async (req, res) => {
         await prisma.kanbanColumn.delete({ where: { kanbanColumnId } });
         return new SuccessResponse(StatusCodes.OK, null, "kanban column deleted successfully").send(res);
     }
+};
+export const addConsumedBudgetToProject = async (req, res) => {
+    if (!req.userId) {
+        throw new BadRequestError("userId not found!");
+    }
+    const projectId = uuidSchema.parse(req.params.projectId);
+    const { consumedBudget } = consumedBudgetSchema.parse(req.body);
+    const prisma = await getClientByTenantId(req.tenantId);
+    const projectUpdate = await prisma.project.update({
+        where: { projectId: projectId },
+        data: {
+            consumedBudget
+        },
+    });
+    return new SuccessResponse(StatusCodes.OK, projectUpdate, 'consumed budget updated successfully').send(res);
 };

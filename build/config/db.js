@@ -1,4 +1,6 @@
-import { PrismaClient, UserRoleEnum, UserStatusEnum, } from "@prisma/client";
+import { PrismaClient } from "@prisma/client";
+import { RegisterSocketServices } from "../services/socket.services.js";
+import { UserRoleEnum, UserStatusEnum, } from "@prisma/client";
 const rootPrismaClient = generatePrismaClient();
 const prismaClients = {
     root: rootPrismaClient,
@@ -16,15 +18,28 @@ function generatePrismaClient(datasourceUrl) {
         result: {
             task: {
                 endDate: {
-                    needs: { startDate: true, duration: true },
                     compute(task) {
-                        const { startDate, duration } = task;
-                        const startDateObj = new Date(startDate);
-                        const endDate = startDateObj;
-                        const integerPart = Math.floor(duration);
-                        endDate.setDate(startDateObj.getDate() + integerPart); // Duration as days
-                        const fractionalPartInHours = (duration % 1) * 24; // Duration as hours
-                        endDate.setHours(startDateObj.getHours() + fractionalPartInHours);
+                        let endDate = new Date();
+                        if (task &&
+                            task.startDate &&
+                            task.duration !== null &&
+                            task.duration !== undefined) {
+                            endDate = client.task.calculateEndDate(task.startDate, task.duration);
+                        }
+                        // @ts-ignore
+                        if (task && task.subtasks) {
+                            // @ts-ignore
+                            task.subtasks.forEach((subtask) => {
+                                if (subtask.endDate &&
+                                    (!endDate || subtask.endDate > endDate)) {
+                                    endDate = new Date(subtask.endDate);
+                                }
+                                else if (subtask.dueDate &&
+                                    (!endDate || subtask.dueDate > endDate)) {
+                                    endDate = new Date(subtask.dueDate);
+                                }
+                            });
+                        }
                         return endDate;
                     },
                 },
@@ -57,6 +72,23 @@ function generatePrismaClient(datasourceUrl) {
             },
         },
         model: {
+            notification: {
+                async sendNotification(notificationType, details, sentTo, sentBy, referenceId) {
+                    const responseNotification = await client.notification.create({
+                        data: {
+                            type: notificationType,
+                            details: details,
+                            sentTo: sentTo,
+                            sentBy: sentBy,
+                            referenceId: referenceId,
+                        },
+                    });
+                    RegisterSocketServices.io
+                        .in(responseNotification.sentTo)
+                        .emit("notification", responseNotification);
+                    return responseNotification;
+                },
+            },
             history: {
                 async createHistory(userId, historyType, historyMesage, historyData, historyRefrenceId) {
                     const history = await client.history.create({
@@ -178,6 +210,41 @@ function generatePrismaClient(datasourceUrl) {
                         }
                     }
                     return count;
+                },
+                calculateEndDate(startDate, duration) {
+                    const startDateObj = new Date(startDate);
+                    const endDate = new Date(startDateObj);
+                    const integerPart = Math.floor(duration);
+                    endDate.setDate(startDateObj.getDate() + integerPart);
+                    const fractionalPartInHours = (duration % 1) * 24;
+                    endDate.setHours(startDateObj.getHours() + fractionalPartInHours);
+                    return endDate;
+                },
+                async findMaxEndDateAmongTasks(projectId) {
+                    const tasks = await client.task.findMany({
+                        where: { projectId: projectId },
+                        select: {
+                            startDate: true,
+                            duration: true,
+                            dueDate: true,
+                            milestoneIndicator: true,
+                        },
+                    });
+                    let maxEndDate = null;
+                    tasks.forEach((task) => {
+                        if (task.startDate &&
+                            task.duration !== null &&
+                            task.duration !== undefined) {
+                            // Check if milestone is true and use dueDate in that case
+                            const endDate = task.milestoneIndicator && task.dueDate
+                                ? new Date(task.dueDate)
+                                : client.task.calculateEndDate(task.startDate, task.duration);
+                            if (!maxEndDate || endDate > maxEndDate) {
+                                maxEndDate = endDate;
+                            }
+                        }
+                    });
+                    return maxEndDate;
                 },
             },
             comments: {

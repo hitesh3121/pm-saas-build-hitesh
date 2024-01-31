@@ -14,6 +14,9 @@ import { organisationStatuSchema } from "../schemas/organisationSchema.js";
 import { ZodError } from "zod";
 import { AwsUploadService } from "../services/aws.services.js";
 import { cookieConfig } from "../utils/setCookies.js";
+import { generateOTP } from "../utils/otpHelper.js";
+import { OtpService } from "../services/userOtp.services.js";
+import { verifyEmailOtpSchema } from "../schemas/authSchema.js";
 export const me = async (req, res) => {
     const prisma = await getClientByTenantId(req.tenantId);
     const user = await prisma.consoleUser.findUniqueOrThrow({
@@ -53,6 +56,20 @@ export const loginConsole = async (req, res) => {
             maxAge: cookieConfig.maxAgeRefreshToken
         });
         const { password, ...infoWithoutPassword } = user;
+        if (!user.isVerified) {
+            const otpValue = generateOTP();
+            const subjectMessage = `Login OTP`;
+            const expiresInMinutes = 5;
+            const bodyMessage = `Here is your login OTP : ${otpValue}, OTP is valid for ${expiresInMinutes} minutes`;
+            try {
+                await OtpService.saveOTP(otpValue, user.userId, req.tenantId, expiresInMinutes * 60);
+                await EmailService.sendEmail(user.email, subjectMessage, bodyMessage);
+            }
+            catch (error) {
+                console.error('Failed to send otp email', error);
+            }
+        }
+        ;
         return new SuccessResponse(StatusCodes.OK, { user: infoWithoutPassword }, "Login successfully").send(res);
     }
     throw new UnAuthorizedError();
@@ -131,7 +148,6 @@ export const createOperator = async (req, res) => {
             lastName: lastName,
             password: hashedPassword,
             status: ConsoleStatusEnum.ACTIVE,
-            isVerified: true,
             role: ConsoleRoleEnum.OPERATOR,
         },
     });
@@ -141,6 +157,7 @@ export const createOperator = async (req, res) => {
       You are invited in console
       
       URL: ${settings.adminURL}/login
+      EMAIL: ${newUser.email}
       PASSWORD: ${randomPassword}
       `;
         await EmailService.sendEmail(newUser.email, subjectMessage, bodyMessage);
@@ -345,6 +362,23 @@ export const deleteOrganisation = async (req, res) => {
         where: {
             organisationId,
         },
+        include: {
+            userOrganisation: true,
+            projects: {
+                include: {
+                    tasks: {
+                        include: {
+                            assignedUsers: true,
+                            comments: true,
+                            dependencies: true,
+                            documentAttachments: true,
+                            histories: true,
+                            notifications: true
+                        }
+                    }
+                }
+            }
+        }
     });
     return new SuccessResponse(StatusCodes.OK, null, "Organisation deleted successfully").send(res);
 };
@@ -409,4 +443,13 @@ export const blockAndReassignAdministator = async (req, res) => {
         });
     });
     return new SuccessResponse(StatusCodes.OK, null, "Administrator reassgined successfully").send(res);
+};
+export const otpVerifyConsole = async (req, res) => {
+    const { otp } = verifyEmailOtpSchema.parse(req.body);
+    const checkOtp = await OtpService.verifyOTPForConsole(otp, req.userId, req.tenantId);
+    if (!checkOtp) {
+        throw new BadRequestError("Invalid OTP");
+    }
+    ;
+    return new SuccessResponse(StatusCodes.OK, null, 'OTP verified successfully').send(res);
 };

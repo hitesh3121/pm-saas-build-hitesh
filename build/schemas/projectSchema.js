@@ -36,3 +36,8 @@ export const updateKanbanSchema = z.object({
     name: z.string({ required_error: ZodErrorMessageEnumValue.REQUIRED }),
     percentage: z.number().min(0).max(100).multipleOf(0.01).optional(),
 });
+export const consumedBudgetSchema = z.object({
+    consumedBudget: z.string({
+        required_error: ZodErrorMessageEnumValue.REQUIRED,
+    }),
+});
