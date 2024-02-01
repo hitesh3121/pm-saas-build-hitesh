@@ -2,7 +2,7 @@ import { z } from "zod";
 import { OverAllTrackEnumValue, ProjectDefaultViewEnumValue, ProjectStatusEnumValue, ZodErrorMessageEnumValue } from "./enums.js";
 export const createProjectSchema = z.object({
     projectName: z.string({ required_error: ZodErrorMessageEnumValue.REQUIRED }),
-    projectDescription: z.string({ required_error: ZodErrorMessageEnumValue.REQUIRED }),
+    projectDescription: z.string().optional(),
     startDate: z.coerce.date({ required_error: ZodErrorMessageEnumValue.REQUIRED }),
     estimatedEndDate: z.coerce.date({ required_error: ZodErrorMessageEnumValue.REQUIRED }),
     estimatedBudget: z.string({ required_error: ZodErrorMessageEnumValue.REQUIRED }),
@@ -11,7 +11,7 @@ export const createProjectSchema = z.object({
 });
 export const updateProjectSchema = z.object({
     projectName: z.string().min(1).optional(),
-    projectDescription: z.string().min(1).optional(),
+    projectDescription: z.string().optional(),
     startDate: z.coerce.date().optional(),
     estimatedEndDate: z.coerce.date().optional(),
     estimatedBudget: z.string().min(1).optional(),
