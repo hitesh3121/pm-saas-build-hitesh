@@ -20,4 +20,5 @@ router.put("/operator", authMiddleware, ConsoleController.updateOperator);
 router.put("/change-password", authMiddleware, ConsoleController.changePassword);
 router.put("/profile", authMiddleware, ConsoleController.updateConsoleUserAvtarImg);
 router.put("/verify-otp", authMiddleware, ConsoleController.otpVerifyConsole);
+router.post("/resend-otp", authMiddleware, ConsoleController.resendOTP);
 export default router;
