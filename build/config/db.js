@@ -1,6 +1,5 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, TaskStatusEnum, UserStatusEnum, UserRoleEnum } from "@prisma/client";
 import { RegisterSocketServices } from "../services/socket.services.js";
-import { UserRoleEnum, UserStatusEnum, } from "@prisma/client";
 const rootPrismaClient = generatePrismaClient();
 const prismaClients = {
     root: rootPrismaClient,
@@ -46,26 +45,13 @@ function generatePrismaClient(datasourceUrl) {
                 flag: {
                     needs: { milestoneIndicator: true },
                     compute(task) {
-                        let { milestoneIndicator, duration, completionPecentage } = task;
-                        //TODO: Need to change logic here
-                        const plannedProgress = duration / duration;
-                        if (!completionPecentage) {
-                            completionPecentage = 100;
-                        }
-                        const tpi = completionPecentage / plannedProgress;
+                        let { milestoneIndicator } = task;
+                        const tpi = client.task.tpiCalculation(task);
                         if (milestoneIndicator) {
-                            return tpi < 1 ? "Red" : "Green";
+                            return tpi.tpiValue < 1 ? "Red" : "Green";
                         }
                         else {
-                            if (tpi < 0.8) {
-                                return "Red";
-                            }
-                            else if (tpi >= 0.8 && tpi < 0.95) {
-                                return "Orange";
-                            }
-                            else {
-                                return "Green";
-                            }
+                            return tpi.tpiFlag;
                         }
                     },
                 },
@@ -112,6 +98,7 @@ function generatePrismaClient(datasourceUrl) {
                             user: {
                                 status: UserStatusEnum.ACTIVE,
                             },
+                            deletedAt: null,
                         },
                     });
                 },
@@ -123,6 +110,7 @@ function generatePrismaClient(datasourceUrl) {
                         where: {
                             projectId,
                             parentTaskId: null,
+                            deletedAt: null,
                         },
                     });
                     let completionPecentageOrDuration = 0;
@@ -165,9 +153,10 @@ function generatePrismaClient(datasourceUrl) {
                 },
                 async getTaskById(taskId) {
                     return client.task.findFirstOrThrow({
-                        where: { taskId },
+                        where: { taskId, deletedAt: null, },
                         include: {
                             assignedUsers: {
+                                where: { deletedAt: null },
                                 include: {
                                     user: true,
                                 },
@@ -198,7 +187,7 @@ function generatePrismaClient(datasourceUrl) {
                     let count = 0;
                     while (currentTaskId) {
                         const currentTask = (await client.task.findFirst({
-                            where: { taskId: currentTaskId },
+                            where: { taskId: currentTaskId, deletedAt: null, },
                             select: { parentTaskId: true },
                         }));
                         if (currentTask) {
@@ -222,7 +211,7 @@ function generatePrismaClient(datasourceUrl) {
                 },
                 async findMaxEndDateAmongTasks(projectId) {
                     const tasks = await client.task.findMany({
-                        where: { projectId: projectId },
+                        where: { projectId: projectId, deletedAt: null, },
                         select: {
                             startDate: true,
                             duration: true,
@@ -246,11 +235,44 @@ function generatePrismaClient(datasourceUrl) {
                     });
                     return maxEndDate;
                 },
+                tpiCalculation(task) {
+                    let { duration, completionPecentage, startDate, status } = task;
+                    if (status === TaskStatusEnum.TODO ||
+                        status === TaskStatusEnum.PLANNED) {
+                        return {
+                            tpiValue: 0,
+                            tpiFlag: "Red"
+                        };
+                    }
+                    const currentDate = new Date();
+                    const startDateObj = new Date(startDate);
+                    const elapsedDays = Math.ceil((currentDate.getTime() - startDateObj.getTime()) /
+                        (1000 * 60 * 60 * 24));
+                    const plannedProgress = elapsedDays / duration;
+                    if (!completionPecentage) {
+                        completionPecentage = 0;
+                    }
+                    const tpi = completionPecentage / plannedProgress;
+                    let flag = "";
+                    if (tpi < 0.8) {
+                        flag = "Red";
+                    }
+                    else if (tpi >= 0.8 && tpi < 0.95) {
+                        flag = "Orange";
+                    }
+                    else {
+                        flag = "Green";
+                    }
+                    return {
+                        tpiValue: tpi,
+                        tpiFlag: flag
+                    };
+                }
             },
             comments: {
                 async canEditOrDelete(commentId, userId) {
                     const comment = await client.comments.findFirstOrThrow({
-                        where: { commentId },
+                        where: { commentId, deletedAt: null },
                         include: {
                             commentByUser: true,
                         },
@@ -269,11 +291,12 @@ function generatePrismaClient(datasourceUrl) {
             taskAttachment: {
                 async canDelete(attachmentId, userId) {
                     const attachment = await client.taskAttachment.findFirstOrThrow({
-                        where: { attachmentId: attachmentId },
+                        where: { attachmentId: attachmentId, deletedAt: null },
                         include: {
                             task: {
                                 include: {
                                     assignedUsers: {
+                                        where: { deletedAt: null },
                                         include: {
                                             user: true,
                                         },
@@ -298,6 +321,7 @@ function generatePrismaClient(datasourceUrl) {
                     const dependencies = await client.taskDependencies.findFirstOrThrow({
                         where: {
                             taskDependenciesId: taskDependenciesId,
+                            deletedAt: null,
                         },
                     });
                     const userRoles = await client.user.getUserRoles(userId);
@@ -317,6 +341,7 @@ function generatePrismaClient(datasourceUrl) {
                     const user = await client.user.findFirstOrThrow({
                         include: {
                             userOrganisation: {
+                                where: { deletedAt: null },
                                 select: {
                                     role: true,
                                 },
@@ -324,12 +349,13 @@ function generatePrismaClient(datasourceUrl) {
                         },
                         where: {
                             userId: userId,
+                            deletedAt: null,
                         },
                     });
                     return user.userOrganisation.map((org) => org.role);
                 },
             },
-        },
+        }
     });
     return client;
 }

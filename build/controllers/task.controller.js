@@ -9,35 +9,34 @@ import { uuidSchema } from '../schemas/commonSchema.js';
 import { MilestoneIndicatorStatusEnum } from '@prisma/client';
 import { HistoryTypeEnumValue } from '../schemas/enums.js';
 import { removeProperties } from "../types/removeProperties.js";
+import { selectUserFields } from '../utils/selectedFieldsOfUsers.js';
 export const getTasks = async (req, res) => {
     const projectId = projectIdSchema.parse(req.params.projectId);
     const prisma = await getClientByTenantId(req.tenantId);
     const tasks = await prisma.task.findMany({
-        where: { projectId: projectId },
+        where: { projectId: projectId, deletedAt: null },
         orderBy: { createdAt: 'desc' }, include: {
             assignedUsers: {
+                where: { deletedAt: null },
                 select: {
                     taskAssignUsersId: true,
                     user: {
-                        select: {
-                            userId: true,
-                            avatarImg: true,
-                            email: true,
-                            firstName: true,
-                            lastName: true
-                        }
+                        select: selectUserFields,
                     }
                 }
             },
             subtasks: {
+                where: { deletedAt: null },
                 include: {
                     subtasks: {
+                        where: { deletedAt: null },
                         include: {
                             subtasks: true,
                         },
                     },
                 },
             },
+            dependencies: true
         },
     });
     const finalArray = tasks.map((task) => {
@@ -54,38 +53,33 @@ export const getTaskById = async (req, res) => {
     const taskId = uuidSchema.parse(req.params.taskId);
     const prisma = await getClientByTenantId(req.tenantId);
     const task = await prisma.task.findFirstOrThrow({
-        where: { taskId: taskId },
+        where: { taskId: taskId, deletedAt: null },
         include: {
             comments: {
                 orderBy: { createdAt: "desc" },
                 include: {
                     commentByUser: {
-                        select: {
-                            firstName: true,
-                            lastName: true,
-                            email: true,
-                            avatarImg: true,
-                        },
+                        select: selectUserFields,
                     },
                 },
             },
             assignedUsers: {
+                where: { deletedAt: null },
                 select: {
                     taskAssignUsersId: true,
                     user: {
-                        select: {
-                            userId: true,
-                            avatarImg: true,
-                            email: true,
-                            firstName: true,
-                            lastName: true
-                        }
+                        select: selectUserFields,
                     }
                 }
             },
-            documentAttachments: true,
-            subtasks: true,
+            documentAttachments: {
+                where: { deletedAt: null }
+            },
+            subtasks: {
+                where: { deletedAt: null },
+            },
             dependencies: {
+                where: { deletedAt: null },
                 include: {
                     dependentOnTask: true,
                 },
@@ -94,12 +88,7 @@ export const getTaskById = async (req, res) => {
                 orderBy: { createdAt: "desc" },
                 include: {
                     createdByUser: {
-                        select: {
-                            avatarImg: true,
-                            email: true,
-                            firstName: true,
-                            lastName: true,
-                        },
+                        select: selectUserFields,
                     },
                 },
             },
@@ -118,7 +107,7 @@ export const createTask = async (req, res) => {
     const parentTaskId = req.params.parentTaskId;
     if (parentTaskId) {
         const parentTask = await prisma.task.findUnique({
-            where: { taskId: parentTaskId },
+            where: { taskId: parentTaskId, deletedAt: null },
         });
         if (!parentTask) {
             throw new NotFoundError('Parent task not found');
@@ -196,7 +185,7 @@ export const updateTask = async (req, res) => {
         throw new UnAuthorizedError();
     }
     const findtask = await prisma.task.findFirstOrThrow({
-        where: { taskId: taskId },
+        where: { taskId: taskId, deletedAt: null },
         include: {
             documentAttachments: true,
             assignedUsers: true,
@@ -273,8 +262,9 @@ export const deleteTask = async (req, res) => {
     if (!action) {
         throw new UnAuthorizedError();
     }
-    await prisma.task.delete({
+    await prisma.task.update({
         where: { taskId },
+        data: { deletedAt: new Date() },
         include: {
             comments: true,
             documentAttachments: true,
@@ -293,7 +283,7 @@ export const statusChangeTask = async (req, res) => {
     const statusBody = taskStatusSchema.parse(req.body);
     const prisma = await getClientByTenantId(req.tenantId);
     if (taskId) {
-        const findTask = await prisma.task.findFirstOrThrow({ where: { taskId: taskId } });
+        const findTask = await prisma.task.findFirstOrThrow({ where: { taskId: taskId, deletedAt: null } });
         let updatedTask = await prisma.task.update({
             where: { taskId: taskId },
             data: {
@@ -326,7 +316,7 @@ export const statusCompletedAllTAsk = async (req, res) => {
     const projectId = projectIdSchema.parse(req.params.projectId);
     const prisma = await getClientByTenantId(req.tenantId);
     const findAllTaskByProjectId = await prisma.task.findMany({
-        where: { projectId: projectId }
+        where: { projectId: projectId, deletedAt: null }
     });
     if (findAllTaskByProjectId.length > 0) {
         await prisma.task.updateMany({
@@ -435,7 +425,7 @@ export const addAttachment = async (req, res) => {
         await prisma.history.createHistory(req.userId, HistoryTypeEnumValue.TASK, historyMessage, historyData, taskId);
     }
     const findTask = await prisma.task.findFirst({
-        where: { taskId: taskId },
+        where: { taskId: taskId, deletedAt: null },
         include: { documentAttachments: true },
     });
     return new SuccessResponse(StatusCodes.CREATED, findTask, "Add attachment successfully").send(res);
@@ -452,7 +442,13 @@ export const deleteAttachment = async (req, res) => {
     }
     //TODO: If Delete require on S3
     // await AwsUploadService.deleteFile(attachment.name, 'task-attachment');
-    const deletedAttachment = await prisma.taskAttachment.delete({ where: { attachmentId } });
+    // const deletedAttachment = await prisma.taskAttachment.delete({ where: { attachmentId } });
+    const deletedAttachment = await prisma.taskAttachment.update({
+        where: { attachmentId },
+        data: {
+            deletedAt: new Date(),
+        },
+    });
     // History-Manage
     const historyMessage = "Task's attachment was removed";
     const historyData = { oldValue: deletedAttachment.url, newValue: null };
@@ -465,19 +461,13 @@ export const taskAssignToUser = async (req, res) => {
     }
     const prisma = await getClientByTenantId(req.tenantId);
     const usersOfOrganisation = await prisma.userOrganisation.findMany({
-        where: { organisationId: req.organisationId },
+        where: { organisationId: req.organisationId, deletedAt: null },
         select: {
             jobTitle: true,
             organisationId: true,
             role: true,
             user: {
-                select: {
-                    userId: true,
-                    avatarImg: true,
-                    email: true,
-                    firstName: true,
-                    lastName: true,
-                },
+                select: selectUserFields,
             },
         },
     });
@@ -578,6 +568,7 @@ export const removeDependencies = async (req, res) => {
     if (!req.userId) {
         throw new BadRequestError("userId not found!!");
     }
+    console.log({ uuid: req.params.taskDependenciesId });
     const taskDependenciesId = uuidSchema.parse(req.params.taskDependenciesId);
     const prisma = await getClientByTenantId(req.tenantId);
     const action = await prisma.taskDependencies.canDelete(taskDependenciesId, req.userId);

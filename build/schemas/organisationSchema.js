@@ -47,3 +47,7 @@ export const memberRoleSchema = z.object({
         message: "Only team member and project manager roles are allowed",
     }),
 });
+export const reAssginedTaskSchema = z.object({
+    oldUserId: z.string().uuid(),
+    newUserId: z.string().uuid(),
+});

@@ -17,11 +17,13 @@ import { cookieConfig } from "../utils/setCookies.js";
 import { generateOTP } from "../utils/otpHelper.js";
 import { OtpService } from "../services/userOtp.services.js";
 import { verifyEmailOtpSchema } from "../schemas/authSchema.js";
+import { selectUserFields } from "../utils/selectedFieldsOfUsers.js";
 export const me = async (req, res) => {
     const prisma = await getClientByTenantId(req.tenantId);
     const user = await prisma.consoleUser.findUniqueOrThrow({
         where: {
             userId: req.userId,
+            deletedAt: null,
         },
     });
     if (user?.status === ConsoleStatusEnum.INACTIVE) {
@@ -34,7 +36,7 @@ export const loginConsole = async (req, res) => {
     const { email, password } = consoleLoginSchema.parse(req.body);
     const prisma = await getClientByTenantId(req.tenantId);
     const user = await prisma.consoleUser.findUnique({
-        where: { email },
+        where: { email, deletedAt: null, },
     });
     if (user?.status === ConsoleStatusEnum.INACTIVE) {
         throw new BadRequestError("User is DEACTIVE");
@@ -83,6 +85,7 @@ export const changePassword = async (req, res) => {
     const findConsoleUser = await prisma.consoleUser.findUniqueOrThrow({
         where: {
             userId: req.userId,
+            deletedAt: null,
         },
     });
     const verifyPassword = await compareEncryption(oldPassword, findConsoleUser?.password);
@@ -129,6 +132,7 @@ export const createOperator = async (req, res) => {
     const findOperator = await prisma.consoleUser.findUnique({
         where: {
             email: email,
+            deletedAt: null,
         },
     });
     if (findOperator) {
@@ -207,10 +211,13 @@ export const deleteOperator = async (req, res) => {
     }
     const userId = uuidSchema.parse(req.params.userId);
     const prisma = await getClientByTenantId(req.tenantId);
-    await prisma.consoleUser.delete({
+    await prisma.consoleUser.update({
         where: {
             userId: userId,
         },
+        data: {
+            deletedAt: new Date()
+        }
     });
     return new SuccessResponse(StatusCodes.OK, null, "Operator deleted successfully").send(res);
 };
@@ -224,6 +231,7 @@ export const getAllOperator = async (req, res) => {
             role: {
                 in: [ConsoleRoleEnum.OPERATOR],
             },
+            deletedAt: null,
         },
         orderBy: {
             createdAt: "asc",
@@ -239,9 +247,10 @@ export const changeUserStatus = async (req, res) => {
     const prisma = await getClientByTenantId(req.tenantId);
     const { organisationId, status } = userStatuSchema.parse(req.body);
     const findUser = await prisma.user.findFirstOrThrow({
-        where: { userId },
+        where: { userId, deletedAt: null },
         include: {
             userOrganisation: {
+                where: { deletedAt: null },
                 select: {
                     role: true,
                 },
@@ -307,20 +316,18 @@ export const getAllOrganisation = async (req, res) => {
     }
     const prisma = await getClientByTenantId(req.tenantId);
     const organisations = await prisma.organisation.findMany({
+        where: {
+            deletedAt: null,
+        },
         orderBy: {
             createdAt: "asc",
         },
         include: {
             userOrganisation: {
+                where: { deletedAt: null },
                 include: {
                     user: {
-                        select: {
-                            avatarImg: true,
-                            email: true,
-                            lastName: true,
-                            firstName: true,
-                            status: true,
-                        },
+                        select: selectUserFields
                     },
                 },
             },
@@ -335,16 +342,10 @@ export const organisationsUser = async (req, res) => {
     const organisationId = uuidSchema.parse(req.params.organisationId);
     const prisma = await getClientByTenantId(req.tenantId);
     let userOfOrg = await prisma.userOrganisation.findMany({
-        where: { organisationId },
+        where: { organisationId, deletedAt: null },
         include: {
             user: {
-                select: {
-                    avatarImg: true,
-                    email: true,
-                    lastName: true,
-                    firstName: true,
-                    status: true,
-                },
+                select: selectUserFields
             },
         },
     });
@@ -358,7 +359,7 @@ export const deleteOrganisation = async (req, res) => {
     }
     const organisationId = uuidSchema.parse(req.params.organisationId);
     const prisma = await getClientByTenantId(req.tenantId);
-    await prisma.organisation.delete({
+    await prisma.organisation.update({
         where: {
             organisationId,
         },
@@ -378,6 +379,9 @@ export const deleteOrganisation = async (req, res) => {
                     }
                 }
             }
+        },
+        data: {
+            deletedAt: new Date(),
         }
     });
     return new SuccessResponse(StatusCodes.OK, null, "Organisation deleted successfully").send(res);
@@ -386,7 +390,7 @@ export const updateConsoleUserAvtarImg = async (req, res) => {
     const files = avatarImgConsoleSchema.parse(req.files);
     const prisma = await getClientByTenantId(req.tenantId);
     const findUser = await prisma.consoleUser.findFirst({
-        where: { userId: req.userId },
+        where: { userId: req.userId, deletedAt: null, },
     });
     if (!findUser)
         throw new NotFoundError("User not found");
@@ -457,7 +461,8 @@ export const resendOTP = async (req, res) => {
     const prisma = await getClientByTenantId(req.tenantId);
     const user = await prisma.consoleUser.findFirst({
         where: {
-            userId: req.userId
+            userId: req.userId,
+            deletedAt: null,
         }
     });
     if (!user) {

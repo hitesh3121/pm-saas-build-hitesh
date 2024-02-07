@@ -81,7 +81,7 @@ export const login = async (req, res) => {
     const { email, password } = authLoginSchema.parse(req.body);
     const prisma = await getClientByTenantId(req.tenantId);
     const user = await prisma.user.findUnique({
-        where: { email },
+        where: { email, deletedAt: null },
         include: { provider: true },
     });
     if (user &&
@@ -156,7 +156,7 @@ export const forgotPassword = async (req, res) => {
     const { email } = forgotPasswordSchema.parse(req.body);
     const token = generateRandomToken();
     const prisma = await getClientByTenantId(req.tenantId);
-    const findUser = await prisma.user.findFirst({ where: { email: email } });
+    const findUser = await prisma.user.findFirst({ where: { email: email, deletedAt: null } });
     if (!findUser)
         throw new NotFoundError("User not found");
     const expiryTimeInMinutes = 10;
@@ -189,6 +189,7 @@ export const resetPassword = async (req, res) => {
     let resetPasswordRecord = await prisma.resetPassword.findFirst({
         where: {
             token: token,
+            deletedAt: null,
             expiryTime: {
                 gt: new Date(),
             },

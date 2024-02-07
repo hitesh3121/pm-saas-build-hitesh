@@ -13,10 +13,17 @@ import { OrgStatusEnum, UserStatusEnum, UserProviderTypeEnum } from "@prisma/cli
 export const me = async (req, res) => {
     const prisma = await getClientByTenantId(req.tenantId);
     const user = await prisma.user.findUniqueOrThrow({
-        where: { userId: req.userId },
+        where: { userId: req.userId, deletedAt: null },
         include: {
-            userOrganisation: { include: { organisation: true } },
-            provider: { select: { providerType: true } }
+            userOrganisation: {
+                where: { deletedAt: null },
+                include: {
+                    organisation: {
+                        where: { deletedAt: null },
+                    },
+                },
+            },
+            provider: { select: { providerType: true } },
         },
     });
     if (user?.status === UserStatusEnum.INACTIVE) {
@@ -45,7 +52,7 @@ export const updateUserAvtarImg = async (req, res) => {
     const files = avatarImgSchema.parse(req.files);
     const prisma = await getClientByTenantId(req.tenantId);
     const findUser = await prisma.user.findFirst({
-        where: { userId: req.userId },
+        where: { userId: req.userId, deletedAt: null },
     });
     if (!findUser)
         throw new NotFoundError("User not found");
@@ -122,6 +129,7 @@ export const changePassword = async (req, res) => {
     const findUser = await prisma.user.findUniqueOrThrow({
         where: {
             userId: req.userId,
+            deletedAt: null,
             provider: {
                 providerType: UserProviderTypeEnum.EMAIL,
             },
