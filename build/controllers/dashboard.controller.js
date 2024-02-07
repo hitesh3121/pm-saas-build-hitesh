@@ -192,6 +192,7 @@ export const projectDashboardByprojectId = async (req, res) => {
         taskDelayChartData,
         numTeamMembersWorkingOnTasks,
         projectOverAllSituation,
+        projectStatus: projectWithTasks.status
     };
     return new SuccessResponse(StatusCodes.OK, response, "Portfolio for selected project").send(res);
 };
