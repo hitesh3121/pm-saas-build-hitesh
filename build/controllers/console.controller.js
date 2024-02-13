@@ -374,7 +374,6 @@ export const deleteOrganisation = async (req, res) => {
                             dependencies: true,
                             documentAttachments: true,
                             histories: true,
-                            notifications: true
                         }
                     }
                 }

@@ -76,5 +76,6 @@ export const settings = {
         bucketName: AWS_BUCKET_NAME
     },
     environment: ENV_NAME,
-    domain: ".projectchef.io"
+    domain: ".projectchef.io",
+    hours: 24,
 };

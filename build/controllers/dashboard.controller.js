@@ -1,21 +1,46 @@
 import { BadRequestError, SuccessResponse } from "../config/apiError.js";
 import { StatusCodes } from "http-status-codes";
 import { getClientByTenantId } from "../config/db.js";
+import { ProjectStatusEnum, TaskStatusEnum, UserRoleEnum, } from "@prisma/client";
 import { uuidSchema } from "../schemas/commonSchema.js";
 export const projectManagerProjects = async (req, res) => {
     const userId = req.userId;
     const prisma = await getClientByTenantId(req.tenantId);
     const projectManagersProjects = await prisma.project.findMany({
         where: {
-            createdByUserId: userId,
+            OR: [
+                {
+                    organisationId: req.organisationId,
+                    assignedUsers: {
+                        some: {
+                            assginedToUserId: userId,
+                        },
+                    },
+                },
+                {
+                    createdByUserId: userId,
+                },
+            ],
         },
+        include: {
+            tasks: true
+        }
     });
     // Calculate Number of Portfolio Projects per Status
-    const statusCounts = projectManagersProjects.reduce((acc, project) => {
-        const status = project.status;
-        acc[status] = (acc[status] || 0) + 1;
+    const allStatusValues = [
+        ProjectStatusEnum.NOT_STARTED,
+        ProjectStatusEnum.ACTIVE,
+        ProjectStatusEnum.ON_HOLD,
+        ProjectStatusEnum.CLOSED,
+    ];
+    const statusCounts = allStatusValues.reduce((acc, status) => {
+        acc[status] = 0;
         return acc;
     }, {});
+    projectManagersProjects.forEach((project) => {
+        const status = project.status;
+        statusCounts[status]++;
+    });
     // Calculate Number of Portfolio Projects per Overall Situation
     const overallSituationCounts = projectManagersProjects.reduce((acc, project) => {
         const overallSituation = project.overallTrack;
@@ -32,9 +57,18 @@ export const projectManagerProjects = async (req, res) => {
         labels: Object.keys(overallSituationCounts),
         data: Object.values(overallSituationCounts),
     };
-    // TODO: Deley calculation as per SPI logic
+    const projects = await Promise.all(projectManagersProjects.map(async (project) => {
+        const CPI = await prisma.project.calculationCPI(project);
+        const completedTasksCount = await prisma.task.count({
+            where: {
+                projectId: project.projectId,
+                status: TaskStatusEnum.DONE
+            }
+        });
+        return { ...project, CPI, completedTasksCount };
+    }));
     const response = {
-        projectManagersProjects,
+        projects,
         statusChartData,
         overallSituationChartData,
     };
@@ -55,11 +89,20 @@ export const administartorProjects = async (req, res) => {
         },
     });
     // Calculate Number of Portfolio Projects per Status
-    const statusCounts = orgCreatedByUser.projects.reduce((acc, project) => {
-        const status = project.status;
-        acc[status] = (acc[status] || 0) + 1;
+    const allStatusValues = [
+        ProjectStatusEnum.NOT_STARTED,
+        ProjectStatusEnum.ACTIVE,
+        ProjectStatusEnum.ON_HOLD,
+        ProjectStatusEnum.CLOSED,
+    ];
+    const statusCounts = allStatusValues.reduce((acc, status) => {
+        acc[status] = 0;
         return acc;
     }, {});
+    orgCreatedByUser.projects.forEach((project) => {
+        const status = project.status;
+        statusCounts[status]++;
+    });
     // Calculate Number of Portfolio Projects per Overall Situation
     const overallSituationCounts = orgCreatedByUser.projects.reduce((acc, project) => {
         const overallSituation = project.overallTrack;
@@ -76,54 +119,71 @@ export const administartorProjects = async (req, res) => {
         labels: Object.keys(overallSituationCounts),
         data: Object.values(overallSituationCounts),
     };
+    // Fetch project manager information for each project
+    const projectsWithProjectManager = await Promise.all(orgCreatedByUser.projects.map(async (project) => {
+        const CPI = prisma.project.calculationCPI(project);
+        const completedTasksCount = await prisma.task.count({
+            where: {
+                projectId: project.projectId,
+                status: TaskStatusEnum.DONE
+            }
+        });
+        const projectManagerInfo = await prisma.projectAssignUsers.findMany({
+            where: {
+                projectId: project.projectId,
+                user: {
+                    userOrganisation: {
+                        some: {
+                            role: {
+                                equals: UserRoleEnum.PROJECT_MANAGER,
+                            },
+                        },
+                    },
+                },
+            },
+            select: {
+                user: true,
+            },
+        });
+        // If project manager not found, get administrators of the organization
+        if (projectManagerInfo.length === 0) {
+            const projectAdministartor = await prisma.userOrganisation.findMany({
+                where: {
+                    role: {
+                        equals: UserRoleEnum.ADMINISTRATOR,
+                    },
+                    organisationId: req.organisationId,
+                },
+                include: {
+                    user: true,
+                },
+            });
+            return {
+                ...project,
+                projectManagerInfo: projectAdministartor,
+                CPI,
+                completedTasksCount
+            };
+        }
+        else {
+            return {
+                ...project,
+                projectManagerInfo,
+                CPI,
+                completedTasksCount
+            };
+        }
+    }));
     // TODO: Deley calculation as per SPI logic
     const response = {
         orgCreatedByUser,
         statusChartData,
         overallSituationChartData,
+        projectsWithProjectManager,
     };
     return new SuccessResponse(StatusCodes.OK, response, "Portfolio projects of Administartor").send(res);
 };
-export const allOrganisationsProjects = async (req, res) => {
-    const prisma = await getClientByTenantId(req.tenantId);
-    // Fetch all organizations with their projects
-    const allOrganisationsWithProjects = await prisma.organisation.findMany({
-        include: {
-            projects: true,
-        },
-    });
-    const allProjects = allOrganisationsWithProjects.flatMap((org) => org.projects);
-    // Calculate Number of Projects per Status
-    const statusCounts = allProjects.reduce((acc, project) => {
-        const status = project.status;
-        acc[status] = (acc[status] || 0) + 1;
-        return acc;
-    }, {});
-    // Calculate Number of Projects per Overall Situation
-    const overallSituationCounts = allProjects.reduce((acc, project) => {
-        const overallSituation = project.overallTrack;
-        acc[overallSituation] = (acc[overallSituation] || 0) + 1;
-        return acc;
-    }, {});
-    // Prepare data for the status chart
-    const statusChartData = {
-        labels: Object.keys(statusCounts),
-        data: Object.values(statusCounts),
-    };
-    // Prepare data for the overall situation chart
-    const overallSituationChartData = {
-        labels: Object.keys(overallSituationCounts),
-        data: Object.values(overallSituationCounts),
-    };
-    const response = {
-        allOrganisationsWithProjects,
-        statusChartData,
-        overallSituationChartData,
-    };
-    return new SuccessResponse(StatusCodes.OK, response, "Portfolio projects of all Organisations").send(res);
-};
 export const projectDashboardByprojectId = async (req, res) => {
-    const userId = req.userId;
     const projectId = uuidSchema.parse(req.params.projectId);
     // Fetch projects created by the user
     const prisma = await getClientByTenantId(req.tenantId);
@@ -143,16 +203,36 @@ export const projectDashboardByprojectId = async (req, res) => {
     const numTasks = projectWithTasks.tasks.length;
     // Calculate the number of milestones for the project
     const numMilestones = projectWithTasks.tasks.reduce((acc, task) => acc + (task.milestoneIndicator ? 1 : 0), 0);
-    const projectBudgetTrend = projectWithTasks.budgetTrack;
+    const budgetTrack = projectWithTasks.budgetTrack;
     const projectOverAllSituation = projectWithTasks.overallTrack;
+    const consumedBudget = projectWithTasks.consumedBudget;
+    const estimatedBudget = projectWithTasks.estimatedBudget;
+    const actualCost = projectWithTasks.actualCost;
+    const scheduleTrend = projectWithTasks.scheduleTrend;
+    const budgetTrend = projectWithTasks.budgetTrend;
+    const projectProgression = await prisma.project.projectProgression(projectId);
+    // CPI
+    const cpi = prisma.project.calculationCPI(projectWithTasks);
+    // SPI
+    const tasksWithSPI = projectWithTasks.tasks.map(task => {
+        const spi = prisma.task.calculationSPI(task);
+        return {
+            taskId: task.taskId,
+            taskName: task.taskName,
+            spi,
+            taskStatus: task.status
+        };
+    });
+    const spi = await Promise.all(tasksWithSPI);
     // Project Date's
+    const duration = Math.ceil((new Date(projectWithTasks.actualEndDate).getTime() - new Date(projectWithTasks.startDate).getTime()) / 86400000) + 1;
     const projectDates = {
         startDate: projectWithTasks.startDate,
         estimatedEndDate: projectWithTasks.estimatedEndDate,
+        actualEndDate: projectWithTasks.actualEndDate,
+        projectCreatedAt: projectWithTasks.createdAt,
+        duration,
     };
-    // Todo: Need to handle KPI-SPI-CPI
-    // TODO: Schedule trend
-    // TODO: Risks severity
     // Calculate Number of Portfolio Projects per Overall Situation
     const statusCounts = projectWithTasks.tasks.reduce((acc, task) => {
         const status = task.status;
@@ -175,24 +255,39 @@ export const projectDashboardByprojectId = async (req, res) => {
         };
     });
     const taskDelayChartData = await Promise.all(taskDelayChartDataPromises);
-    // Collect unique user IDs from assigned users of tasks
-    const assignedUsersSet = new Set();
-    projectWithTasks.tasks.forEach((task) => {
-        task.assignedUsers.forEach((assignUser) => {
-            assignedUsersSet.add(assignUser.assginedToUserId);
-        });
+    // Count of working users in this project
+    const numTeamMembersWorkingOnTasks = await prisma.projectAssignUsers.count({
+        where: {
+            projectId,
+            user: {
+                userOrganisation: {
+                    some: {
+                        role: {
+                            in: [UserRoleEnum.PROJECT_MANAGER, UserRoleEnum.TEAM_MEMBER],
+                        },
+                    },
+                },
+            },
+        },
     });
-    const numTeamMembersWorkingOnTasks = assignedUsersSet.size;
     const response = {
         numTasks,
         numMilestones,
         projectDates,
-        projectBudgetTrend,
+        budgetTrack,
         taskStatusChartData,
         taskDelayChartData,
         numTeamMembersWorkingOnTasks,
         projectOverAllSituation,
-        projectStatus: projectWithTasks.status
+        projectStatus: projectWithTasks.status,
+        spi,
+        cpi,
+        budgetTrend,
+        scheduleTrend,
+        actualCost,
+        consumedBudget,
+        estimatedBudget,
+        projectProgression,
     };
     return new SuccessResponse(StatusCodes.OK, response, "Portfolio for selected project").send(res);
 };

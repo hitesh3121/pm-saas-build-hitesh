@@ -40,10 +40,12 @@ export const getTasks = async (req, res) => {
         },
     });
     const finalArray = tasks.map((task) => {
+        const duration = prisma.task.daysFromTwoDates(task.startDate, task.endDate);
+        const completionPecentage = prisma.task.calculationSubTaskProgression(task);
         const updatedTask = {
             ...task,
-            completionPecentage: prisma.task
-                .calculationSubTaskProgression(task)
+            duration,
+            completionPecentage,
         };
         return updatedTask;
     });
@@ -94,7 +96,9 @@ export const getTaskById = async (req, res) => {
             },
         },
     });
-    const finalResponse = { ...task };
+    const duration = prisma.task.daysFromTwoDates(task.startDate, task.endDate);
+    const completionPecentage = prisma.task.calculationSubTaskProgression(task);
+    const finalResponse = { ...task, duration, completionPecentage };
     return new SuccessResponse(StatusCodes.OK, finalResponse, "task selected").send(res);
 };
 export const createTask = async (req, res) => {
@@ -212,7 +216,7 @@ export const updateTask = async (req, res) => {
                 projectId: taskUpdateDB.project.projectId,
             },
             data: {
-                estimatedEndDate: maxEndDate,
+                actualEndDate: maxEndDate,
             },
         });
     }
@@ -459,19 +463,20 @@ export const taskAssignToUser = async (req, res) => {
     if (!req.organisationId) {
         throw new BadRequestError("organisationId not found!");
     }
+    const projectId = uuidSchema.parse(req.params.projectId);
     const prisma = await getClientByTenantId(req.tenantId);
-    const usersOfOrganisation = await prisma.userOrganisation.findMany({
-        where: { organisationId: req.organisationId, deletedAt: null },
+    const usersOfOrganisation = await prisma.projectAssignUsers.findMany({
+        where: { projectId },
         select: {
-            jobTitle: true,
-            organisationId: true,
-            role: true,
+            projectId: true,
+            assginedToUserId: true,
+            projectAssignUsersId: true,
             user: {
                 select: selectUserFields,
             },
         },
     });
-    return new SuccessResponse(StatusCodes.OK, usersOfOrganisation, "Get organisation's users successfully").send(res);
+    return new SuccessResponse(StatusCodes.OK, usersOfOrganisation, "Get project's users successfully").send(res);
 };
 export const addMemberToTask = async (req, res) => {
     if (!req.userId) {
@@ -550,6 +555,15 @@ export const addDependencies = async (req, res) => {
         throw new UnAuthorizedError();
     }
     const { dependentType, dependendentOnTaskId } = dependenciesTaskSchema.parse(req.body);
+    const findDependencies = await prisma.taskDependencies.findFirst({
+        where: {
+            dependendentOnTaskId,
+            dependentTaskId: taskId,
+        },
+    });
+    if (findDependencies) {
+        throw new BadRequestError("Already have dependencies on this task!!");
+    }
     const addDependencies = await prisma.taskDependencies.create({
         data: {
             dependentType: dependentType,

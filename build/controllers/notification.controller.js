@@ -22,7 +22,6 @@ export const getAllNotification = async (req, res) => {
         include: {
             sentNotificationBy: { select: userSelectFields },
             sentNotificationTo: { select: userSelectFields },
-            task: true,
         },
         orderBy: {
             createdAt: "desc",

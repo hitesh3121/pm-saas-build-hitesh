@@ -50,3 +50,8 @@ export const OverAllTrackEnumValue = {
     STORMY: "STORMY",
     SUNNY: "SUNNY"
 };
+export const ScheduleAndBudgetTrend = {
+    STABLE: "STABLE",
+    INCREASING: "INCREASING",
+    DECREASING: "DECREASING"
+};

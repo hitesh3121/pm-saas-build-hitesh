@@ -3,7 +3,7 @@ import * as TaskController from "../controllers/task.controller.js";
 import { UserRoleEnum } from "@prisma/client";
 import { roleMiddleware } from "../middleware/role.middleware.js";
 let router = express.Router();
-router.get("/taskAssignUsers", roleMiddleware([
+router.get("/taskAssignUsers/:projectId", roleMiddleware([
     UserRoleEnum.ADMINISTRATOR,
     UserRoleEnum.PROJECT_MANAGER,
     UserRoleEnum.TEAM_MEMBER,
