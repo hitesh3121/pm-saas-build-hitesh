@@ -8,8 +8,10 @@ export const projectManagerProjects = async (req, res) => {
     const prisma = await getClientByTenantId(req.tenantId);
     const projectManagersProjects = await prisma.project.findMany({
         where: {
+            deletedAt: null,
             OR: [
                 {
+                    deletedAt: null,
                     organisationId: req.organisationId,
                     assignedUsers: {
                         some: {
@@ -83,6 +85,7 @@ export const administartorProjects = async (req, res) => {
         where: {
             createdByUserId: req.userId,
             organisationId: req.organisationId,
+            deletedAt: null,
         },
         include: {
             projects: true,
@@ -125,13 +128,15 @@ export const administartorProjects = async (req, res) => {
         const completedTasksCount = await prisma.task.count({
             where: {
                 projectId: project.projectId,
-                status: TaskStatusEnum.DONE
+                status: TaskStatusEnum.DONE,
+                deletedAt: null,
             }
         });
         const projectManagerInfo = await prisma.projectAssignUsers.findMany({
             where: {
                 projectId: project.projectId,
                 user: {
+                    deletedAt: null,
                     userOrganisation: {
                         some: {
                             role: {
@@ -153,6 +158,7 @@ export const administartorProjects = async (req, res) => {
                         equals: UserRoleEnum.ADMINISTRATOR,
                     },
                     organisationId: req.organisationId,
+                    deletedAt: null,
                 },
                 include: {
                     user: true,
@@ -174,7 +180,6 @@ export const administartorProjects = async (req, res) => {
             };
         }
     }));
-    // TODO: Deley calculation as per SPI logic
     const response = {
         orgCreatedByUser,
         statusChartData,
@@ -190,9 +195,13 @@ export const projectDashboardByprojectId = async (req, res) => {
     const projectWithTasks = await prisma.project.findFirstOrThrow({
         where: {
             projectId,
+            deletedAt: null,
         },
         include: {
             tasks: {
+                where: {
+                    deletedAt: null,
+                },
                 include: {
                     assignedUsers: true,
                 },
