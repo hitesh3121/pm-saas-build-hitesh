@@ -4,6 +4,7 @@ import { roleMiddleware } from "../middleware/role.middleware.js";
 import { UserRoleEnum } from "@prisma/client";
 let router = express.Router();
 router.get("/:organisationId", OrganisationControlller.getOrganisationById);
+router.put("/holiday-csv/:organisationId", roleMiddleware([UserRoleEnum.ADMINISTRATOR]), OrganisationControlller.uploadHolidayCSV);
 router.put("/re-assigned-task/", roleMiddleware([UserRoleEnum.ADMINISTRATOR]), OrganisationControlller.reassignTasks);
 router.post("/", OrganisationControlller.createOrganisation);
 router.post("/:organisationId/user", roleMiddleware([UserRoleEnum.ADMINISTRATOR]), OrganisationControlller.addOrganisationMember);

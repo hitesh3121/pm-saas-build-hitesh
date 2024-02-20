@@ -9,7 +9,7 @@ import { OtpService } from "../services/userOtp.services.js";
 import { generateOTP } from "../utils/otpHelper.js";
 import { AwsUploadService } from "../services/aws.services.js";
 import { compareEncryption, encrypt } from "../utils/encryption.js";
-import { OrgStatusEnum, UserStatusEnum, UserProviderTypeEnum } from "@prisma/client";
+import { OrgStatusEnum, UserStatusEnum, UserProviderTypeEnum, UserRoleEnum } from "@prisma/client";
 export const me = async (req, res) => {
     const prisma = await getClientByTenantId(req.tenantId);
     const user = await prisma.user.findUniqueOrThrow({
@@ -20,14 +20,19 @@ export const me = async (req, res) => {
                 include: {
                     organisation: {
                         where: { deletedAt: null },
+                        include: { orgHolidays: true, }
                     },
                 },
             },
             provider: { select: { providerType: true } },
         },
     });
+    let errorMessage = "Your account is blocked, please contact your administrator";
+    if (user.userOrganisation[0]?.role === UserRoleEnum.ADMINISTRATOR) {
+        errorMessage = "Your account is blocked, please contact our support at support@projectchef.io";
+    }
     if (user?.status === UserStatusEnum.INACTIVE) {
-        throw new BadRequestError('User is DEACTIVE');
+        throw new BadRequestError(errorMessage);
     }
     if (user.userOrganisation.length > 0) {
         const organisation = user.userOrganisation[0]?.organisation;
@@ -130,28 +135,31 @@ export const changePassword = async (req, res) => {
         where: {
             userId: req.userId,
             deletedAt: null,
-            provider: {
-                providerType: UserProviderTypeEnum.EMAIL,
-            },
         },
         include: { provider: true },
     });
-    const verifyPassword = await compareEncryption(oldPassword, findUser?.provider?.idOrPassword);
+    const findEmailProvider = await prisma.userProvider.findFirst({
+        where: {
+            userId: req.userId,
+            deletedAt: null,
+            providerType: UserProviderTypeEnum.EMAIL,
+        }
+    });
+    if (!findEmailProvider) {
+        throw new UnAuthorizedError();
+    }
+    const verifyPassword = await compareEncryption(oldPassword, findEmailProvider.idOrPassword);
     if (!verifyPassword) {
         throw new UnAuthorizedError();
     }
     const hashedPassword = await encrypt(password);
-    await prisma.user.update({
-        data: {
-            provider: {
-                update: {
-                    idOrPassword: hashedPassword,
-                },
-            },
-        },
+    await prisma.userProvider.update({
         where: {
-            userId: req.userId,
+            userProviderId: findEmailProvider.userProviderId,
         },
+        data: {
+            idOrPassword: hashedPassword
+        }
     });
     return new SuccessResponse(StatusCodes.OK, null, "Change password successfully").send(res);
 };

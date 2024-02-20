@@ -3,6 +3,7 @@ import * as AuthController from "../controllers/auth.controller.js";
 import passport from "passport";
 import { settings } from "../config/settings.js";
 import { createJwtToken } from "../utils/jwtHelper.js";
+import { cookieConfig } from "../utils/setCookies.js";
 let router = express.Router();
 router.put("/reset-password/:token", AuthController.resetPassword);
 router.post("/forgot-password", AuthController.forgotPassword);
@@ -25,20 +26,14 @@ router.get("/google/callback", passport.authenticate("google", {
     // Token
     const token = createJwtToken(tokenPayload);
     res.cookie(settings.jwt.tokenCookieKey, token, {
-        maxAge: 1 * 24 * 60 * 60 * 1000,
-        httpOnly: false,
-        secure: true,
-        sameSite: 'none',
-        domain: settings.domain
+        ...cookieConfig,
+        maxAge: cookieConfig.maxAgeToken
     });
     // Refresh-Token
     const refreshToken = createJwtToken(tokenPayload, true);
     res.cookie(settings.jwt.refreshTokenCookieKey, refreshToken, {
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-        httpOnly: false,
-        secure: true,
-        sameSite: 'none',
-        domain: settings.domain
+        ...cookieConfig,
+        maxAge: cookieConfig.maxAgeRefreshToken
     });
     res.redirect(`${settings.appURL}`);
 });

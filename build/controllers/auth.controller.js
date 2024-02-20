@@ -1,4 +1,4 @@
-import { OrgStatusEnum, UserProviderTypeEnum, UserStatusEnum } from "@prisma/client";
+import { OrgStatusEnum, UserProviderTypeEnum, UserRoleEnum, UserStatusEnum } from "@prisma/client";
 import { getClientByTenantId } from "../config/db.js";
 import { settings } from "../config/settings.js";
 import { createJwtToken, verifyJwtToken } from "../utils/jwtHelper.js";
@@ -6,9 +6,6 @@ import { compareEncryption, encrypt } from "../utils/encryption.js";
 import { BadRequestError, InternalServerError, NotFoundError, SuccessResponse, UnAuthorizedError, } from "../config/apiError.js";
 import { StatusCodes } from "http-status-codes";
 import { authLoginSchema, authRefreshTokenSchema, authSignUpSchema, forgotPasswordSchema, resetPasswordTokenSchema, resetTokenSchema, } from "../schemas/authSchema.js";
-import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library.js";
-import { PRISMA_ERROR_CODE } from "../constants/prismaErrorCodes.js";
-import { ZodError } from "zod";
 import { generateOTP } from "../utils/otpHelper.js";
 import { EmailService } from "../services/email.services.js";
 import { OtpService } from "../services/userOtp.services.js";
@@ -16,14 +13,18 @@ import { generateRandomToken } from "../utils/generateRandomToken.js";
 import { cookieConfig } from "../utils/setCookies.js";
 export const signUp = async (req, res) => {
     const { firstName, lastName, email, password } = authSignUpSchema.parse(req.body);
-    try {
-        const hashedPassword = await encrypt(password);
-        const prisma = await getClientByTenantId(req.tenantId);
-        const user = await prisma.user.create({
+    const hashedPassword = await encrypt(password);
+    const prisma = await getClientByTenantId(req.tenantId);
+    const findUserIfExists = await prisma.user.findUnique({
+        where: { email, deletedAt: null },
+    });
+    let newCreatedUser;
+    if (!findUserIfExists) {
+        newCreatedUser = await prisma.user.create({
             data: {
-                firstName: firstName,
-                lastName: lastName,
-                email: email,
+                firstName,
+                lastName,
+                email,
                 status: UserStatusEnum.ACTIVE,
                 provider: {
                     create: {
@@ -33,49 +34,64 @@ export const signUp = async (req, res) => {
                 },
             },
         });
-        const tokenPayload = {
-            userId: user.userId,
-            email: email,
-            tenantId: req.tenantId ?? "root",
-        };
-        const token = createJwtToken(tokenPayload);
-        const refreshToken = createJwtToken(tokenPayload, true);
-        const otpValue = generateOTP();
-        const subjectMessage = `Login OTP`;
-        const expiresInMinutes = 10;
-        const bodyMessage = `Here is your login OTP : ${otpValue}, OTP is valid for ${expiresInMinutes} minutes`;
-        await OtpService.saveOTP(otpValue, user.userId, req.tenantId, expiresInMinutes * 60);
-        try {
-            await EmailService.sendEmail(email, subjectMessage, bodyMessage);
-        }
-        catch (error) {
-            console.error("Failed to send email", error);
-        }
-        res.cookie(settings.jwt.tokenCookieKey, token, {
-            ...cookieConfig,
-            maxAge: cookieConfig.maxAgeToken
-        });
-        res.cookie(settings.jwt.refreshTokenCookieKey, refreshToken, {
-            ...cookieConfig,
-            maxAge: cookieConfig.maxAgeRefreshToken
-        });
-        return new SuccessResponse(StatusCodes.CREATED, user, "Sign up successfully").send(res);
     }
-    catch (error) {
-        console.error(error);
-        if (error instanceof PrismaClientKnownRequestError) {
-            if (error.code === PRISMA_ERROR_CODE.UNIQUE_CONSTRAINT) {
-                throw new ZodError([
-                    {
-                        code: "invalid_string",
-                        message: "User with given email already exists",
-                        path: ["email"],
-                        validation: "email",
+    else {
+        const findEmailProvider = await prisma.userProvider.findFirst({
+            where: {
+                userId: findUserIfExists.userId,
+                providerType: { in: [UserProviderTypeEnum.EMAIL] },
+                deletedAt: null,
+            },
+        });
+        if (findEmailProvider) {
+            throw new BadRequestError("User already exists with this email");
+        }
+        else {
+            try {
+                await prisma.userProvider.create({
+                    data: {
+                        providerType: UserProviderTypeEnum.EMAIL,
+                        userId: findUserIfExists.userId,
+                        idOrPassword: hashedPassword,
                     },
-                ]);
+                });
+            }
+            catch (error) {
+                console.error(error);
             }
         }
     }
+    const userId = findUserIfExists
+        ? findUserIfExists.userId
+        : newCreatedUser?.userId;
+    const user = findUserIfExists ? findUserIfExists : newCreatedUser;
+    const tokenPayload = {
+        userId,
+        email: email,
+        tenantId: req.tenantId ?? "root",
+    };
+    const token = createJwtToken(tokenPayload);
+    const refreshToken = createJwtToken(tokenPayload, true);
+    const otpValue = generateOTP();
+    const subjectMessage = `Login OTP`;
+    const expiresInMinutes = 10;
+    const bodyMessage = `Here is your login OTP : ${otpValue}, OTP is valid for ${expiresInMinutes} minutes`;
+    await OtpService.saveOTP(otpValue, userId, req.tenantId, expiresInMinutes * 60);
+    try {
+        await EmailService.sendEmail(email, subjectMessage, bodyMessage);
+    }
+    catch (error) {
+        console.error("Failed to send email", error);
+    }
+    res.cookie(settings.jwt.tokenCookieKey, token, {
+        ...cookieConfig,
+        maxAge: cookieConfig.maxAgeToken,
+    });
+    res.cookie(settings.jwt.refreshTokenCookieKey, refreshToken, {
+        ...cookieConfig,
+        maxAge: cookieConfig.maxAgeRefreshToken,
+    });
+    return new SuccessResponse(StatusCodes.CREATED, user, "Sign up successfully").send(res);
 };
 export const login = async (req, res) => {
     const { email, password } = authLoginSchema.parse(req.body);
@@ -94,18 +110,22 @@ export const login = async (req, res) => {
             provider: true,
         },
     });
-    if (user?.status === UserStatusEnum.INACTIVE) {
-        throw new BadRequestError('User is DEACTIVE');
+    if (user.status === UserStatusEnum.INACTIVE) {
+        const errorMessage = user.userOrganisation[0]?.role === UserRoleEnum.ADMINISTRATOR
+            ? "Your account is blocked, please contact our support at support@projectchef.io"
+            : "Your account is blocked, please contact your administrator";
+        throw new BadRequestError(errorMessage);
     }
-    if (user.userOrganisation.length > 0) {
-        const organisation = user.userOrganisation[0]?.organisation;
-        if (organisation?.status === OrgStatusEnum.DEACTIVE) {
-            throw new BadRequestError("Organisation is DEACTIVE");
-        }
+    if (user.userOrganisation.length > 0 &&
+        user.userOrganisation[0]?.organisation?.status === OrgStatusEnum.DEACTIVE) {
+        throw new BadRequestError("Organisation is DEACTIVE");
     }
+    const findUserProvider = await prisma.userProvider.findFirst({
+        where: { userId: user.userId, providerType: UserProviderTypeEnum.EMAIL },
+    });
     if (user &&
-        user.provider?.providerType == UserProviderTypeEnum.EMAIL &&
-        (await compareEncryption(password, user.provider?.idOrPassword))) {
+        findUserProvider?.providerType == UserProviderTypeEnum.EMAIL &&
+        (await compareEncryption(password, findUserProvider.idOrPassword))) {
         const tokenPayload = {
             userId: user.userId,
             email: email,
@@ -217,24 +237,31 @@ export const resetPassword = async (req, res) => {
     if (!resetPasswordRecord)
         throw new BadRequestError("Invalid token");
     const hashedPassword = await encrypt(password);
-    await prisma.resetPassword.update({
+    const findUserProvider = await prisma.userProvider.findFirst({
         where: {
-            resetPasswordId: resetPasswordRecord.resetPasswordId,
             userId: resetPasswordRecord.userId,
-        },
-        data: {
-            isUsed: true,
-            user: {
-                update: {
-                    provider: {
-                        update: {
-                            idOrPassword: hashedPassword,
-                        },
-                    },
-                },
-            },
-        },
+            providerType: UserProviderTypeEnum.EMAIL
+        }
     });
+    await prisma.$transaction([
+        prisma.resetPassword.update({
+            where: {
+                resetPasswordId: resetPasswordRecord.resetPasswordId,
+                userId: resetPasswordRecord.userId,
+            },
+            data: {
+                isUsed: true
+            }
+        }),
+        prisma.userProvider.update({
+            where: {
+                userProviderId: findUserProvider?.userProviderId
+            },
+            data: {
+                idOrPassword: hashedPassword
+            }
+        })
+    ]);
     return new SuccessResponse(StatusCodes.OK, null, "Reset password successfully").send(res);
 };
 export const logout = (req, res) => {

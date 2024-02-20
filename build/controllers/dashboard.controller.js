@@ -3,8 +3,15 @@ import { StatusCodes } from "http-status-codes";
 import { getClientByTenantId } from "../config/db.js";
 import { ProjectStatusEnum, TaskStatusEnum, UserRoleEnum, } from "@prisma/client";
 import { uuidSchema } from "../schemas/commonSchema.js";
+import { calculationSPI } from "../utils/calculateSPI.js";
+import { calculationCPI } from "../utils/calculateCPI.js";
+import { calculationTPI } from "../utils/calculationFlag.js";
 export const projectManagerProjects = async (req, res) => {
+    if (!req.organisationId) {
+        throw new BadRequestError("OrganisationId not found!");
+    }
     const userId = req.userId;
+    const organisationId = req.organisationId;
     const prisma = await getClientByTenantId(req.tenantId);
     const projectManagersProjects = await prisma.project.findMany({
         where: {
@@ -60,7 +67,7 @@ export const projectManagerProjects = async (req, res) => {
         data: Object.values(overallSituationCounts),
     };
     const projects = await Promise.all(projectManagersProjects.map(async (project) => {
-        const CPI = await prisma.project.calculationCPI(project);
+        const CPI = await calculationCPI(project, req.tenantId, organisationId);
         const completedTasksCount = await prisma.task.count({
             where: {
                 projectId: project.projectId,
@@ -80,11 +87,12 @@ export const administartorProjects = async (req, res) => {
     if (!req.organisationId) {
         throw new BadRequestError("organisationId not found!");
     }
+    const organisationId = req.organisationId;
     const prisma = await getClientByTenantId(req.tenantId);
     const orgCreatedByUser = await prisma.organisation.findFirstOrThrow({
         where: {
             createdByUserId: req.userId,
-            organisationId: req.organisationId,
+            organisationId: organisationId,
             deletedAt: null,
         },
         include: {
@@ -122,9 +130,8 @@ export const administartorProjects = async (req, res) => {
         labels: Object.keys(overallSituationCounts),
         data: Object.values(overallSituationCounts),
     };
-    // Fetch project manager information for each project
-    const projectsWithProjectManager = await Promise.all(orgCreatedByUser.projects.map(async (project) => {
-        const CPI = prisma.project.calculationCPI(project);
+    const projectsWithCPI = await Promise.all(orgCreatedByUser.projects.map(async (project) => {
+        const CPI = await calculationCPI(project, req.tenantId, organisationId);
         const completedTasksCount = await prisma.task.count({
             where: {
                 projectId: project.projectId,
@@ -150,45 +157,38 @@ export const administartorProjects = async (req, res) => {
                 user: true,
             },
         });
-        // If project manager not found, get administrators of the organization
-        if (projectManagerInfo.length === 0) {
-            const projectAdministartor = await prisma.userOrganisation.findMany({
-                where: {
-                    role: {
-                        equals: UserRoleEnum.ADMINISTRATOR,
-                    },
-                    organisationId: req.organisationId,
-                    deletedAt: null,
+        const projectAdministartor = await prisma.userOrganisation.findMany({
+            where: {
+                role: {
+                    equals: UserRoleEnum.ADMINISTRATOR,
                 },
-                include: {
-                    user: true,
-                },
-            });
-            return {
-                ...project,
-                projectManagerInfo: projectAdministartor,
-                CPI,
-                completedTasksCount
-            };
-        }
-        else {
-            return {
-                ...project,
-                projectManagerInfo,
-                CPI,
-                completedTasksCount
-            };
-        }
+                organisationId: req.organisationId,
+                deletedAt: null,
+            },
+            include: {
+                user: true,
+            },
+        });
+        return {
+            ...project,
+            CPI,
+            completedTasksCount,
+            projectManager: projectManagerInfo.length === 0 ? projectAdministartor : projectManagerInfo
+        };
     }));
+    orgCreatedByUser.projects = projectsWithCPI;
     const response = {
         orgCreatedByUser,
         statusChartData,
         overallSituationChartData,
-        projectsWithProjectManager,
     };
     return new SuccessResponse(StatusCodes.OK, response, "Portfolio projects of Administartor").send(res);
 };
 export const projectDashboardByprojectId = async (req, res) => {
+    if (!req.organisationId) {
+        throw new BadRequestError("organisationId not found!!");
+    }
+    const organisationId = req.organisationId;
     const projectId = uuidSchema.parse(req.params.projectId);
     // Fetch projects created by the user
     const prisma = await getClientByTenantId(req.tenantId);
@@ -219,12 +219,12 @@ export const projectDashboardByprojectId = async (req, res) => {
     const actualCost = projectWithTasks.actualCost;
     const scheduleTrend = projectWithTasks.scheduleTrend;
     const budgetTrend = projectWithTasks.budgetTrend;
-    const projectProgression = await prisma.project.projectProgression(projectId);
+    const projectProgression = await prisma.project.projectProgression(projectId, req.tenantId, req.organisationId);
     // CPI
-    const cpi = prisma.project.calculationCPI(projectWithTasks);
+    const cpi = await calculationCPI(projectWithTasks, req.tenantId, organisationId);
     // SPI
-    const tasksWithSPI = projectWithTasks.tasks.map(task => {
-        const spi = prisma.task.calculationSPI(task);
+    const tasksWithSPI = projectWithTasks.tasks.map(async (task) => {
+        const spi = await calculationSPI(task, req.tenantId, organisationId);
         return {
             taskId: task.taskId,
             taskName: task.taskName,
@@ -255,12 +255,12 @@ export const projectDashboardByprojectId = async (req, res) => {
     };
     // Calculate TPI and Deley for each task in the project
     const taskDelayChartDataPromises = projectWithTasks.tasks.map(async (task) => {
-        const tpiObj = prisma.task.tpiCalculation(task);
+        const flag = await calculationTPI(task, req.tenantId, organisationId);
         return {
             taskId: task.taskId,
             taskName: task.taskName,
-            tpiValue: tpiObj.tpiValue,
-            tpiFlag: tpiObj.tpiFlag,
+            tpiValue: flag.tpiValue,
+            tpiFlag: flag.tpiFlag,
         };
     });
     const taskDelayChartData = await Promise.all(taskDelayChartDataPromises);

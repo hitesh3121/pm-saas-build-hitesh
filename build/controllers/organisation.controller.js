@@ -11,6 +11,7 @@ import { settings } from "../config/settings.js";
 import { generateRandomPassword } from "../utils/generateRandomPassword.js";
 import { selectUserFields } from "../utils/selectedFieldsOfUsers.js";
 import { HistoryTypeEnumValue } from "../schemas/enums.js";
+import moment from 'moment';
 export const getOrganisationById = async (req, res) => {
     const organisationId = organisationIdSchema.parse(req.params.organisationId);
     const prisma = await getClientByTenantId(req.tenantId);
@@ -170,7 +171,7 @@ export const addOrganisationMember = async (req, res) => {
       You are invited in Organisation ${newUserOrg?.organisation?.organisationName}
       
       URL: ${settings.appURL}/login
-      EMAIL: ${newUser.email}
+      LOGIN: ${newUser.email}
       PASSWORD: ${randomPassword}
       `;
             await EmailService.sendEmail(newUser.email, subjectMessage, bodyMessage);
@@ -185,14 +186,6 @@ export const addOrganisationMember = async (req, res) => {
             throw new ZodError([{
                     code: 'invalid_string',
                     message: 'User already added in your organisation',
-                    path: ['email'],
-                    validation: "email",
-                }]);
-        }
-        if (user.userOrganisation.length !== 0) {
-            throw new ZodError([{
-                    code: 'invalid_string',
-                    message: 'User is part of other organisation',
                     path: ['email'],
                     validation: "email",
                 }]);
@@ -241,9 +234,14 @@ export const removeOrganisationMember = async (req, res) => {
                 user: {
                     update: {
                         provider: {
-                            update: {
-                                deletedAt: new Date(),
-                            },
+                            updateMany: {
+                                where: {
+                                    userId: findUserOrg.userId
+                                },
+                                data: {
+                                    deletedAt: new Date(),
+                                }
+                            }
                         },
                         deletedAt: new Date(),
                     },
@@ -353,4 +351,60 @@ export const reassignTasks = async (req, res) => {
         }));
     });
     return new SuccessResponse(StatusCodes.OK, null, "Tasks reassigned successfully.").send(res);
+};
+export const uploadHolidayCSV = async (req, res) => {
+    const userId = req.userId;
+    const organisationId = uuidSchema.parse(req.params.organisationId);
+    if (!userId) {
+        throw new BadRequestError("userId not found!");
+    }
+    const file = req.files?.csv;
+    if (!file) {
+        throw new BadRequestError("No CSV file uploaded!");
+    }
+    const csvString = file.data.toString("utf-8");
+    const csvRows = csvString
+        .split("\n")
+        .map((row, index) => {
+        if (index === 0)
+            return null;
+        const columns = row.split(";").map((col) => col.trim());
+        if (columns.length < 4)
+            return null;
+        return {
+            Date: moment.utc(columns[0], "DD.MM.YYYY").toDate(),
+            Designation: columns[1] ? columns[1].replace(/[\ufffd"]/g, "") : "",
+            DayOfWeek: columns[2] ? columns[2].replace(/[\ufffd"]/g, "") : "",
+            CalendarWeek: columns[3] ? columns[3].replace(/[\ufffd"]/g, "") : "",
+        };
+    })
+        .filter((row) => row !== null);
+    const prisma = await getClientByTenantId(req.tenantId);
+    for (const value of csvRows) {
+        if (value?.Date) {
+            try {
+                const findHoliday = await prisma.organisationHolidays.findFirst({
+                    where: {
+                        organisationId,
+                        holidayStartDate: value.Date,
+                        holidayReason: value.Designation,
+                    },
+                });
+                if (!findHoliday) {
+                    await prisma.organisationHolidays.create({
+                        data: {
+                            holidayStartDate: value.Date,
+                            holidayEndDate: null,
+                            holidayReason: value.Designation,
+                            organisationId: organisationId,
+                        },
+                    });
+                }
+            }
+            catch (error) {
+                console.error(error);
+            }
+        }
+    }
+    return new SuccessResponse(StatusCodes.OK, csvRows, "Successfully uploaded holidays").send(res);
 };
