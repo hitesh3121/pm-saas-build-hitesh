@@ -71,7 +71,7 @@ export const projectManagerProjects = async (req, res) => {
         const completedTasksCount = await prisma.task.count({
             where: {
                 projectId: project.projectId,
-                status: TaskStatusEnum.DONE
+                status: TaskStatusEnum.COMPLETED
             }
         });
         return { ...project, CPI, completedTasksCount };
@@ -135,7 +135,7 @@ export const administartorProjects = async (req, res) => {
         const completedTasksCount = await prisma.task.count({
             where: {
                 projectId: project.projectId,
-                status: TaskStatusEnum.DONE,
+                status: TaskStatusEnum.COMPLETED,
                 deletedAt: null,
             }
         });

@@ -15,10 +15,9 @@ export const TaskDependenciesEnumValue = {
     WAITING_ON: 'WAITING_ON',
 };
 export const TaskStatusEnumValue = {
-    DONE: "DONE",
+    NOT_STARTED: "NOT_STARTED",
     IN_PROGRESS: "IN_PROGRESS",
-    PLANNED: "PLANNED",
-    TODO: "TODO"
+    COMPLETED: "COMPLETED"
 };
 export const OrgStatusEnumValue = {
     ACTIVE: 'ACTIVE',

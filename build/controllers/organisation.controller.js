@@ -214,7 +214,7 @@ export const removeOrganisationMember = async (req, res) => {
         where: {
             deletedAt: null,
             status: {
-                notIn: [TaskStatusEnum.DONE],
+                notIn: [TaskStatusEnum.COMPLETED],
             },
             assignedUsers: {
                 some: {
@@ -454,7 +454,6 @@ export const resendInvitationToMember = async (req, res) => {
     LOGIN: ${findMember.user.email}
     PASSWORD: ${randomPassword}
     `;
-        console.log('randomPassword', { randomPassword });
         const findProvider = await prisma.userProvider.findFirstOrThrow({
             where: {
                 userId: findMember.user.userId,

@@ -6,7 +6,7 @@ export async function calculationTPI(task, tenantId, organisationId) {
     let { duration, completionPecentage, startDate, status } = task;
     const endDate = prisma.task.calculateEndDate(startDate, duration);
     const newDuration = await calculateWorkingDays(startDate, endDate, tenantId, organisationId);
-    if (status === TaskStatusEnum.TODO || status === TaskStatusEnum.PLANNED) {
+    if (status === TaskStatusEnum.NOT_STARTED) {
         return {
             tpiValue: 0,
             tpiFlag: "Green",

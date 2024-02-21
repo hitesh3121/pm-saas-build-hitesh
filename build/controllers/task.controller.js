@@ -124,6 +124,15 @@ export const createTask = async (req, res) => {
     const projectId = projectIdSchema.parse(req.params.projectId);
     const prisma = await getClientByTenantId(req.tenantId);
     const parentTaskId = req.params.parentTaskId;
+    const findTask = await prisma.task.findFirst({
+        where: {
+            projectId,
+            taskName,
+        }
+    });
+    if (findTask) {
+        throw new BadRequestError("A task with a similar name already exists!");
+    }
     if (parentTaskId) {
         const parentTask = await prisma.task.findUnique({
             where: { taskId: parentTaskId, deletedAt: null },
@@ -324,10 +333,10 @@ export const statusChangeTask = async (req, res) => {
             where: { taskId: taskId },
             data: {
                 status: statusBody.status,
-                milestoneStatus: statusBody.status === TaskStatusEnum.DONE
+                milestoneStatus: statusBody.status === TaskStatusEnum.COMPLETED
                     ? MilestoneIndicatorStatusEnum.COMPLETED
                     : MilestoneIndicatorStatusEnum.NOT_STARTED,
-                completionPecentage: statusBody.status === TaskStatusEnum.DONE
+                completionPecentage: statusBody.status === TaskStatusEnum.COMPLETED
                     ? 100
                     : findTask.completionPecentage,
                 updatedByUserId: req.userId
@@ -358,7 +367,7 @@ export const statusCompletedAllTAsk = async (req, res) => {
         await prisma.task.updateMany({
             where: { projectId: projectId },
             data: {
-                status: TaskStatusEnum.DONE,
+                status: TaskStatusEnum.COMPLETED,
                 completionPecentage: 100,
                 updatedByUserId: req.userId
             }
@@ -368,7 +377,7 @@ export const statusCompletedAllTAsk = async (req, res) => {
             const historyMessage = "Task’s status was changed";
             const historyNewValue = {
                 oldValue: task.status,
-                newValue: TaskStatusEnum.DONE,
+                newValue: TaskStatusEnum.COMPLETED,
             };
             await prisma.history.createHistory(req.userId, HistoryTypeEnumValue.TASK, historyMessage, historyNewValue, task.taskId);
         }
@@ -614,7 +623,6 @@ export const removeDependencies = async (req, res) => {
     if (!req.userId) {
         throw new BadRequestError("userId not found!!");
     }
-    console.log({ uuid: req.params.taskDependenciesId });
     const taskDependenciesId = uuidSchema.parse(req.params.taskDependenciesId);
     const prisma = await getClientByTenantId(req.tenantId);
     const action = await prisma.taskDependencies.canDelete(taskDependenciesId, req.userId);
