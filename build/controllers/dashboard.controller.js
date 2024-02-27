@@ -112,7 +112,6 @@ export const administartorProjects = async (req, res) => {
     const prisma = await getClientByTenantId(req.tenantId);
     const orgCreatedByUser = await prisma.organisation.findFirstOrThrow({
         where: {
-            createdByUserId: req.userId,
             organisationId: organisationId,
             deletedAt: null,
         },
