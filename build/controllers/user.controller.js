@@ -37,7 +37,7 @@ export const me = async (req, res) => {
     if (user.userOrganisation.length > 0) {
         const organisation = user.userOrganisation[0]?.organisation;
         if (organisation?.status === OrgStatusEnum.DEACTIVE) {
-            throw new BadRequestError("Organisation is DEACTIVE");
+            throw new BadRequestError(errorMessage);
         }
     }
     return new SuccessResponse(StatusCodes.OK, user, "Login user details").send(res);

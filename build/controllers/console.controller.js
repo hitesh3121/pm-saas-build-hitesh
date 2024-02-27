@@ -349,6 +349,7 @@ export const organisationsUser = async (req, res) => {
             user: {
                 select: selectUserFields
             },
+            organisation: true
         },
     });
     userOfOrg = userOfOrg.filter((value) => !(value.role === UserRoleEnum.ADMINISTRATOR &&
@@ -383,6 +384,22 @@ export const deleteOrganisation = async (req, res) => {
         },
         data: {
             deletedAt: new Date(),
+            projects: {
+                updateMany: {
+                    where: { organisationId },
+                    data: {
+                        deletedAt: new Date()
+                    }
+                }
+            },
+            userOrganisation: {
+                updateMany: {
+                    where: { organisationId },
+                    data: {
+                        deletedAt: new Date(),
+                    }
+                }
+            }
         }
     });
     return new SuccessResponse(StatusCodes.OK, null, "Organisation deleted successfully").send(res);
