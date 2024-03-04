@@ -59,3 +59,8 @@ export const blockAndReassignAdministatorSchema = z.object({
     userOrganisationBlockId: z.string().uuid(),
     reassginAdministratorId: z.string().uuid()
 });
+export const changeAdministatorSchema = z.object({
+    organisationId: z.string().uuid(),
+    removeUserAsAdministartor: z.string().uuid(),
+    addUserAsAdministratorId: z.string().uuid(),
+});

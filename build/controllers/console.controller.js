@@ -3,7 +3,7 @@ import { compareEncryption, encrypt } from "../utils/encryption.js";
 import { ConsoleRoleEnum, ConsoleStatusEnum, UserRoleEnum, UserStatusEnum, } from "@prisma/client";
 import { BadRequestError, InternalServerError, NotFoundError, SuccessResponse, UnAuthorizedError, } from "../config/apiError.js";
 import { StatusCodes } from "http-status-codes";
-import { avatarImgConsoleSchema, blockAndReassignAdministatorSchema, changeOrganisationMemberRoleSchema, consoleLoginSchema, consolePasswordSchema, operatorSchema, operatorStatusSchema, operatorUpdateSchema, } from "../schemas/consoleSchema.js";
+import { avatarImgConsoleSchema, blockAndReassignAdministatorSchema, changeAdministatorSchema, changeOrganisationMemberRoleSchema, consoleLoginSchema, consolePasswordSchema, operatorSchema, operatorStatusSchema, operatorUpdateSchema, } from "../schemas/consoleSchema.js";
 import { createJwtToken } from "../utils/jwtHelper.js";
 import { settings } from "../config/settings.js";
 import { generateRandomPassword } from "../utils/generateRandomPassword.js";
@@ -512,4 +512,28 @@ export const resendOTP = async (req, res) => {
     }
     ;
     return new SuccessResponse(StatusCodes.OK, null, 'Resend OTP successfully').send(res);
+};
+export const changeOrgAdministator = async (req, res) => {
+    if (!req.userId) {
+        throw new BadRequestError("userId not found!!");
+    }
+    const prisma = await getClientByTenantId(req.tenantId);
+    await prisma.$transaction(async (tx) => {
+        const { organisationId, addUserAsAdministratorId, removeUserAsAdministartor, } = changeAdministatorSchema.parse(req.body);
+        // Remove as ADMINISTRATOR
+        await tx.userOrganisation.update({
+            where: { organisationId, userOrganisationId: removeUserAsAdministartor },
+            data: {
+                role: UserRoleEnum.PROJECT_MANAGER,
+            },
+        });
+        // Add as ADMINISTRATOR
+        await tx.userOrganisation.update({
+            where: { organisationId, userOrganisationId: addUserAsAdministratorId },
+            data: {
+                role: UserRoleEnum.ADMINISTRATOR,
+            },
+        });
+    });
+    return new SuccessResponse(StatusCodes.OK, null, "Administrator changed successfully").send(res);
 };

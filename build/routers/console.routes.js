@@ -12,6 +12,7 @@ router.put("/user/status/:userId", authMiddleware, ConsoleController.changeUserS
 router.put("/user/role/:organisationId", authMiddleware, ConsoleController.changeUserOrganisationRole);
 router.put("/organisation/status/:organisationId", authMiddleware, ConsoleController.changeOrganisationStatus);
 router.put("/organisations/block-reassigned", authMiddleware, ConsoleController.blockAndReassignAdministator);
+router.put("/organisations/administrator-change/", authMiddleware, ConsoleController.changeOrgAdministator);
 router.get("/organisations", authMiddleware, ConsoleController.getAllOrganisation);
 router.get("/organisations/:organisationId", authMiddleware, ConsoleController.organisationsUser);
 router.delete("/organisations/:organisationId", authMiddleware, ConsoleController.deleteOrganisation);

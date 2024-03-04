@@ -187,7 +187,7 @@ export const addOrganisationMember = async (req, res) => {
         catch (error) {
             console.error('Failed to sign up email', error);
         }
-        return new SuccessResponse(200, null).send(res);
+        return new SuccessResponse(200, newUser).send(res);
     }
     else {
         if (user.userOrganisation.find((uo) => uo.organisationId === organisationId)) {
@@ -205,7 +205,7 @@ export const addOrganisationMember = async (req, res) => {
                 organisationId,
             },
         });
-        return new SuccessResponse(200, null).send(res);
+        return new SuccessResponse(200, user).send(res);
     }
 };
 export const removeOrganisationMember = async (req, res) => {

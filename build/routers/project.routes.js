@@ -3,6 +3,7 @@ import * as ProjectController from "../controllers/project.controller.js";
 import { roleMiddleware } from "../middleware/role.middleware.js";
 import { UserRoleEnum } from "@prisma/client";
 let router = express.Router();
+router.put("/duplicate-project/:projectId", roleMiddleware([UserRoleEnum.ADMINISTRATOR, UserRoleEnum.PROJECT_MANAGER]), ProjectController.duplicateProjectAndAllItsTask);
 router.get("/org-users/", roleMiddleware([UserRoleEnum.ADMINISTRATOR, UserRoleEnum.PROJECT_MANAGER]), ProjectController.projectAssignToUser);
 router.get("/", roleMiddleware([
     UserRoleEnum.ADMINISTRATOR,
