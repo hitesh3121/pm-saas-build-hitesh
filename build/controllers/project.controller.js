@@ -33,6 +33,7 @@ export const getProjects = async (req, res) => {
                 deletedAt: null,
             },
             include: {
+                tasks: true,
                 createdByUser: {
                     select: {
                         firstName: true,
@@ -87,6 +88,7 @@ export const getProjects = async (req, res) => {
                 ],
             },
             include: {
+                tasks: true,
                 createdByUser: {
                     select: {
                         firstName: true,
@@ -133,6 +135,7 @@ export const getProjects = async (req, res) => {
                 },
             },
             include: {
+                tasks: true,
                 createdByUser: {
                     select: {
                         firstName: true,
@@ -199,7 +202,10 @@ export const getProjects = async (req, res) => {
                 user: true,
             },
         });
-        const actualDuration = await calculateProjectDuration(project.startDate, project.actualEndDate, req.tenantId, req.organisationId);
+        const actualDurationWithCondition = project.tasks.length === 0
+            ? 0
+            : await calculateProjectDuration(project.startDate, project.actualEndDate, req.tenantId, req.organisationId);
+        const actualDuration = actualDurationWithCondition;
         const estimatedDuration = await calculateProjectDuration(project.startDate, project.estimatedEndDate, req.tenantId, req.organisationId);
         const projectManagerInfo = projectManager.length !== 0 ? projectManager : projectAdministartor;
         const projectWithProgression = {
@@ -244,8 +250,11 @@ export const getProjectById = async (req, res) => {
             },
         },
     });
+    const actualDurationWithCondition = projects.tasks.length === 0
+        ? 0
+        : await calculateProjectDuration(projects.startDate, projects.actualEndDate, req.tenantId, req.organisationId);
+    const actualDuration = actualDurationWithCondition;
     const progressionPercentage = await prisma.project.projectProgression(projectId, req.tenantId, req.organisationId);
-    const actualDuration = await calculateProjectDuration(projects.startDate, projects.actualEndDate, req.tenantId, req.organisationId);
     const estimatedDuration = await calculateProjectDuration(projects.startDate, projects.estimatedEndDate, req.tenantId, req.organisationId);
     const response = { ...projects, progressionPercentage, actualDuration, estimatedDuration };
     return new SuccessResponse(StatusCodes.OK, response, "project selected").send(res);

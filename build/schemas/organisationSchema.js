@@ -27,6 +27,7 @@ export const updateOrganisationSchema = z.object({
     status: z.nativeEnum(OrgStatusEnumValue).optional(),
     country: z.string().min(1).optional(),
     nonWorkingDays: z.nativeEnum(OrgListOfNonWorkingDaysEnum).array().optional(),
+    jobTitlesOfOrg: z.string().array().optional(),
 });
 export const addOrganisationMemberSchema = z.object({
     email: z.string().email({ message: "Email is not valid" }),

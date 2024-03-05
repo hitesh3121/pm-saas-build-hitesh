@@ -86,7 +86,10 @@ export const projectManagerProjects = async (req, res) => {
                 }
             }));
         }
-        const actualDuration = await calculateProjectDuration(project.startDate, project.actualEndDate, req.tenantId, organisationId);
+        const actualDurationWithCondition = project.tasks.length === 0
+            ? 0
+            : await calculateProjectDuration(project.startDate, project.actualEndDate, req.tenantId, organisationId);
+        const actualDuration = actualDurationWithCondition;
         const estimatedDuration = await calculateProjectDuration(project.startDate, project.estimatedEndDate, req.tenantId, organisationId);
         const completedTasksCount = await prisma.task.count({
             where: {
@@ -174,7 +177,10 @@ export const administartorProjects = async (req, res) => {
                 }
             }));
         }
-        const actualDuration = await calculateProjectDuration(project.startDate, project.actualEndDate, req.tenantId, organisationId);
+        const actualDurationWithCondition = project.tasks.length === 0
+            ? 0
+            : await calculateProjectDuration(project.startDate, project.actualEndDate, req.tenantId, organisationId);
+        const actualDuration = actualDurationWithCondition;
         const estimatedDuration = await calculateProjectDuration(project.startDate, project.estimatedEndDate, req.tenantId, organisationId);
         const completedTasksCount = await prisma.task.count({
             where: {
@@ -284,7 +290,10 @@ export const projectDashboardByprojectId = async (req, res) => {
     });
     const spi = await Promise.all(tasksWithSPI);
     // Project Date's
-    const actualDuration = await calculateProjectDuration(projectWithTasks.startDate, projectWithTasks.actualEndDate, req.tenantId, req.organisationId);
+    const actualDurationWithCondition = projectWithTasks.tasks.length === 0
+        ? 0
+        : await calculateProjectDuration(projectWithTasks.startDate, projectWithTasks.actualEndDate, req.tenantId, req.organisationId);
+    const actualDuration = actualDurationWithCondition;
     const estimatedDuration = await calculateProjectDuration(projectWithTasks.startDate, projectWithTasks.estimatedEndDate, req.tenantId, req.organisationId);
     const projectDates = {
         startDate: projectWithTasks.startDate,

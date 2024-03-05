@@ -700,6 +700,7 @@ export const addOrRemoveMilesstone = async (req, res) => {
         data: {
             milestoneIndicator: milestoneIndicator,
             duration,
+            completionPecentage: 0 // If milestone then percentage will be 0 : 05-03-2024 - dev_hitesh
         },
         where: {
             taskId: taskId,
