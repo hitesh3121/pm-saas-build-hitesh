@@ -49,10 +49,15 @@ export const calculateEndDate = async (startDate, duration, tenantId, organisati
     let endDate = new Date(startDateObj);
     endDate.setUTCHours(0, 0, 0, 0);
     let remainingDuration = duration;
+    const startDayOfWeek = endDate.getUTCDay();
+    const startDayAbbreviation = getDayAbbreviation(startDayOfWeek).toUpperCase();
+    if (!nonWorkingDays.includes(startDayAbbreviation) && !isHoliday(endDate, holidays)) {
+        remainingDuration--;
+    }
     while (remainingDuration > 0) {
         endDate.setDate(endDate.getDate() + 1);
         const dayOfWeek = endDate.getUTCDay();
-        const dayAbbreviation = getDayAbbreviation(dayOfWeek);
+        const dayAbbreviation = getDayAbbreviation(dayOfWeek).toUpperCase();
         if (!nonWorkingDays.includes(dayAbbreviation) && !isHoliday(endDate, holidays)) {
             remainingDuration--;
         }
@@ -67,4 +72,34 @@ export const isHoliday = (date, holidays) => {
     const holidayDates = holidays.map(holiday => new Date(holiday.holidayStartDate).setUTCHours(0, 0, 0, 0));
     const dateToCheck = date.setUTCHours(0, 0, 0, 0);
     return holidayDates.includes(dateToCheck);
+};
+export const calculateDuration = async (startDate, endDate, tenantId, organisationId) => {
+    const prisma = await getClientByTenantId(tenantId);
+    const orgDetails = await prisma.organisation.findFirst({
+        where: {
+            organisationId,
+            deletedAt: null,
+        },
+        select: {
+            nonWorkingDays: true,
+            orgHolidays: true,
+        },
+    });
+    const nonWorkingDays = orgDetails?.nonWorkingDays ?? [];
+    const holidays = orgDetails?.orgHolidays ?? [];
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    start.setUTCHours(0, 0, 0, 0);
+    end.setUTCHours(0, 0, 0, 0);
+    let duration = 0;
+    while (start < end) {
+        const dayOfWeek = start.getUTCDay();
+        const dayAbbreviation = getDayAbbreviation(dayOfWeek).toUpperCase();
+        if (!nonWorkingDays.includes(dayAbbreviation) &&
+            !isHoliday(start, holidays)) {
+            duration++;
+        }
+        start.setDate(start.getDate() + 1);
+    }
+    return duration;
 };

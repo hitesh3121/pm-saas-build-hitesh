@@ -9,9 +9,16 @@ export async function calculationSubTaskProgression(task, tenantId, organisation
                 Number(percentage) * (value.duration * settings.hours);
             averagesSumOfDurationTask += value.duration * settings.hours * 100;
         }
-        return ((completionPecentageOrDurationTask / averagesSumOfDurationTask) * 100);
+        const finalPercentage = completionPecentageOrDurationTask / averagesSumOfDurationTask * 100;
+        return (finalPercentage.toFixed(2));
     }
     else {
-        return task.completionPecentage;
+        const completionPercentage = task.completionPecentage;
+        if (completionPercentage === null || isNaN(completionPercentage)) {
+            return 0;
+        }
+        else {
+            return completionPercentage.toFixed(2);
+        }
     }
 }

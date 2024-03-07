@@ -70,6 +70,7 @@ function generatePrismaClient(datasourceUrl) {
                         where: {
                             projectId,
                             deletedAt: null,
+                            parentTaskId: null,
                         },
                     });
                     let completionPecentageOrDuration = 0;
@@ -150,35 +151,49 @@ function generatePrismaClient(datasourceUrl) {
                 },
                 async getSubtasksTimeline(taskId) {
                     const task = await client.task.findFirst({
-                        where: { taskId },
+                        where: { taskId, deletedAt: null },
                         include: {
-                            subtasks: true,
+                            subtasks: {
+                                where: { deletedAt: null },
+                                include: {
+                                    subtasks: {
+                                        where: { deletedAt: null },
+                                        include: {
+                                            subtasks: true,
+                                        },
+                                    },
+                                },
+                            },
                         },
+                        orderBy: { startDate: "asc" },
                     });
                     if (!task) {
-                        return { earliestStartDate: null, lowestEndDate: null };
+                        return { earliestStartDate: null, highestEndDate: null };
                     }
-                    let earliestStartDate = task.startDate;
-                    let lowestEndDate = task.milestoneIndicator
-                        ? task.dueDate
-                        : new Date(task.startDate);
-                    if (!task.milestoneIndicator && task.duration) {
-                        const endDate = new Date(task.startDate);
-                        endDate.setDate(task.startDate.getDate() + task.duration);
-                        lowestEndDate = endDate;
+                    if (task.subtasks.length === 0) {
+                        let endDate = new Date(task.startDate);
+                        endDate.setDate(endDate.getDate() + task.duration);
+                        return { earliestStartDate: task.startDate, highestEndDate: endDate };
                     }
+                    let highestEndDate = null;
+                    let earliestStartDate = null;
                     if (task.subtasks.length > 0) {
                         task.subtasks.forEach((subtask) => {
-                            if (subtask.startDate < earliestStartDate) {
+                            const subtaskEndDate = new Date(subtask.startDate);
+                            subtaskEndDate.setDate(subtaskEndDate.getDate() + subtask.duration);
+                            if (!highestEndDate || subtaskEndDate > highestEndDate) {
+                                highestEndDate = subtaskEndDate;
+                            }
+                            if (!earliestStartDate) {
                                 earliestStartDate = subtask.startDate;
                             }
-                            if (subtask.dueDate &&
-                                (lowestEndDate === null || subtask.dueDate < lowestEndDate)) {
-                                lowestEndDate = subtask.dueDate;
+                            else if (earliestStartDate &&
+                                subtask.startDate < earliestStartDate) {
+                                earliestStartDate = subtask.startDate;
                             }
                         });
                     }
-                    return { earliestStartDate, lowestEndDate };
+                    return { earliestStartDate, highestEndDate };
                 },
             },
             comments: {
