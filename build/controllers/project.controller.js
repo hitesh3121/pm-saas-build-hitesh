@@ -244,6 +244,7 @@ export const getProjectById = async (req, res) => {
                             userOrganisation: {
                                 select: {
                                     role: true,
+                                    jobTitle: true
                                 },
                             },
                         },

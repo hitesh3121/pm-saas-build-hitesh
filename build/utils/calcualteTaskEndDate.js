@@ -1,4 +1,6 @@
 import { getClientByTenantId } from "../config/db.js";
+import { getDayAbbreviation } from "./getDatAbbreviation.js";
+import { isHoliday } from "./checkIsHoliday.js";
 export async function taskEndDate(task, tenantId, organisationId) {
     let endDate = new Date();
     if (task &&
@@ -63,15 +65,6 @@ export const calculateEndDate = async (startDate, duration, tenantId, organisati
         }
     }
     return endDate;
-};
-export const getDayAbbreviation = (dayOfWeek) => {
-    const days = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
-    return days[dayOfWeek] ?? "0";
-};
-export const isHoliday = (date, holidays) => {
-    const holidayDates = holidays.map(holiday => new Date(holiday.holidayStartDate).setUTCHours(0, 0, 0, 0));
-    const dateToCheck = date.setUTCHours(0, 0, 0, 0);
-    return holidayDates.includes(dateToCheck);
 };
 export const calculateDuration = async (startDate, endDate, tenantId, organisationId) => {
     const prisma = await getClientByTenantId(tenantId);

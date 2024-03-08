@@ -1,5 +1,7 @@
 import { BadRequestError } from "../config/apiError.js";
 import { getClientByTenantId } from "../config/db.js";
+import { isHoliday } from "./checkIsHoliday.js";
+import { getDayAbbreviation } from "./getDatAbbreviation.js";
 export const calculateProjectDuration = async (startDate, endDate, tenantId, organisationId) => {
     const prisma = await getClientByTenantId(tenantId);
     const orgDetails = await prisma.organisation.findFirst({
@@ -32,12 +34,4 @@ export const calculateProjectDuration = async (startDate, endDate, tenantId, org
         currentDate.setDate(currentDate.getDate() + 1);
     }
     return duration;
-};
-const getDayAbbreviation = (dayOfWeek) => {
-    const days = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
-    return days[dayOfWeek] ?? "0";
-};
-const isHoliday = (date, holidays) => {
-    const holidayDates = holidays.map((holiday) => new Date(holiday.holidayStartDate).toDateString());
-    return holidayDates.includes(date.toDateString());
 };
