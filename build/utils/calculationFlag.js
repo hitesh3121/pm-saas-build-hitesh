@@ -2,6 +2,7 @@ import { TaskStatusEnum } from "@prisma/client";
 import { getClientByTenantId } from "../config/db.js";
 import { getDayAbbreviation } from "./getDatAbbreviation.js";
 import { isHoliday } from "./checkIsHoliday.js";
+import { taskEndDate } from "./calcualteTaskEndDate.js";
 export async function calculationTPI(task, tenantId, organisationId) {
     let { duration, completionPecentage, startDate, status } = task;
     if (status === TaskStatusEnum.NOT_STARTED) {
@@ -15,11 +16,12 @@ export async function calculationTPI(task, tenantId, organisationId) {
     }
     const currentDate = new Date();
     const taskStartDate = new Date(startDate);
-    const effectiveDate = currentDate < taskStartDate ? taskStartDate : currentDate;
+    const endDate = await taskEndDate(task, tenantId, organisationId);
+    const effectiveDate = currentDate > new Date(endDate) ? new Date(endDate) : currentDate;
     effectiveDate.setUTCHours(0, 0, 0, 0);
     taskStartDate.setUTCHours(0, 0, 0, 0);
     const remainingDuration = await excludeNonWorkingDays(effectiveDate, taskStartDate, tenantId, organisationId);
-    const plannedProgress = remainingDuration / duration;
+    const plannedProgress = (remainingDuration / duration) * 100;
     const tpi = plannedProgress !== 0 ? completionPecentage / plannedProgress : 0;
     let flag;
     if (tpi < 0.8) {
