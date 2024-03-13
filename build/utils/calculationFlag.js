@@ -13,11 +13,12 @@ export async function calculationTPI(task, tenantId, organisationId) {
     if (!completionPecentage) {
         completionPecentage = 0;
     }
+    const currentDate = new Date();
     const taskStartDate = new Date(startDate);
-    const currentDate = new Date() < taskStartDate ? taskStartDate : new Date();
-    currentDate.setUTCHours(0, 0, 0, 0);
+    const effectiveDate = currentDate < taskStartDate ? taskStartDate : currentDate;
+    effectiveDate.setUTCHours(0, 0, 0, 0);
     taskStartDate.setUTCHours(0, 0, 0, 0);
-    const remainingDuration = await excludeNonWorkingDays(currentDate, taskStartDate, tenantId, organisationId);
+    const remainingDuration = await excludeNonWorkingDays(effectiveDate, taskStartDate, tenantId, organisationId);
     const plannedProgress = remainingDuration / duration;
     const tpi = plannedProgress !== 0 ? completionPecentage / plannedProgress : 0;
     let flag;

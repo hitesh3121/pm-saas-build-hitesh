@@ -1,6 +1,5 @@
 import { PrismaClient, UserStatusEnum, UserRoleEnum } from "@prisma/client";
 import { RegisterSocketServices } from "../services/socket.services.js";
-import { settings } from "./settings.js";
 const rootPrismaClient = generatePrismaClient();
 const prismaClients = {
     root: rootPrismaClient,
@@ -65,7 +64,7 @@ function generatePrismaClient(datasourceUrl) {
                 },
             },
             project: {
-                async projectProgression(projectId, tenantId, organisationId) {
+                async projectProgression(projectId) {
                     const parentTasks = await client.task.findMany({
                         where: {
                             projectId,
@@ -76,11 +75,14 @@ function generatePrismaClient(datasourceUrl) {
                     let completionPecentageOrDuration = 0;
                     let averagesSumOfDuration = 0;
                     for (const value of parentTasks) {
-                        completionPecentageOrDuration +=
-                            Number(value.completionPecentage) * (value.duration * settings.hours);
-                        averagesSumOfDuration += value.duration * settings.hours * 100;
+                        if (!value.completionPecentage) {
+                            value.completionPecentage = 0;
+                        }
+                        completionPecentageOrDuration += Number(value.completionPecentage) * (value.duration);
+                        averagesSumOfDuration += value.duration * 100;
                     }
-                    return (completionPecentageOrDuration / averagesSumOfDuration);
+                    const finalValue = (completionPecentageOrDuration / averagesSumOfDuration);
+                    return finalValue;
                 },
             },
             task: {
