@@ -555,10 +555,10 @@ export const addComment = async (req, res) => {
     const taskId = uuidSchema.parse(req.params.taskId);
     const { commentText } = createCommentTaskSchema.parse(req.body);
     const prisma = await getClientByTenantId(req.tenantId);
-    const action = await prisma.task.canCreate(taskId, req.userId);
-    if (!action) {
-        throw new UnAuthorizedError();
-    }
+    // const action = await prisma.task.canCreate(taskId, req.userId);
+    // if (!action) {
+    //   throw new UnAuthorizedError();
+    // }
     const comment = await prisma.comments.create({
         data: {
             taskId: taskId,
