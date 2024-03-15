@@ -77,7 +77,7 @@ export const createOrganisation = async (req, res) => {
                     role: UserRoleEnum.ADMINISTRATOR,
                 },
             },
-            nonWorkingDays: nonWorkingDays,
+            nonWorkingDays: ["SAT", "SUN"], // Non working days will be defualt as per sheet doc : dev_hitesh - 15-03-2024 
         },
     });
     const findUser = await prisma.user.findFirst({
@@ -195,6 +195,14 @@ export const addOrganisationMember = async (req, res) => {
             throw new ZodError([{
                     code: 'invalid_string',
                     message: 'User already added in your organisation',
+                    path: ['email'],
+                    validation: "email",
+                }]);
+        }
+        if (user.userOrganisation.length !== 0) {
+            throw new ZodError([{
+                    code: 'invalid_string',
+                    message: 'User is part of other organisation',
                     path: ['email'],
                     validation: "email",
                 }]);

@@ -166,6 +166,7 @@ export const createTask = async (req, res) => {
             parentTaskId: parentTaskId ? parentTaskId : null,
             createdByUserId: req.userId,
             updatedByUserId: req.userId,
+            completionPecentage: 0 // By defualt percentage will be zero : dev_hitesh
         },
         include: {
             documentAttachments: true,

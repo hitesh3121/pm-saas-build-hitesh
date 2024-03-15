@@ -71,7 +71,7 @@ export const projectManagerProjects = async (req, res) => {
     const labels = ["Significant delay", "On track", "Moderate delay"];
     const data = [0, 0, 0];
     const projects = await Promise.all(projectManagersProjects.map(async (project) => {
-        const CPI = await calculationCPI(project, req.tenantId);
+        const CPI = await calculationCPI(project, req.tenantId, organisationId);
         if (project.status === ProjectStatusEnum.ACTIVE) {
             const spi = await calculationSPI(req.tenantId, organisationId, project.projectId);
             if (spi < 0.8) {
@@ -160,7 +160,7 @@ export const administartorProjects = async (req, res) => {
     const labels = ["Significant delay", "On track", "Moderate delay"];
     const data = [0, 0, 0];
     const projectsWithCPI = await Promise.all(orgCreatedByUser.projects.map(async (project) => {
-        const CPI = await calculationCPI(project, req.tenantId);
+        const CPI = await calculationCPI(project, req.tenantId, organisationId);
         if (project.status === ProjectStatusEnum.ACTIVE) {
             const spi = await calculationSPI(req.tenantId, organisationId, project.projectId);
             if (spi < 0.8) {
@@ -256,6 +256,17 @@ export const projectDashboardByprojectId = async (req, res) => {
                 },
                 include: {
                     assignedUsers: true,
+                    subtasks: {
+                        where: { deletedAt: null },
+                        include: {
+                            subtasks: {
+                                where: { deletedAt: null },
+                                include: {
+                                    subtasks: true,
+                                },
+                            },
+                        },
+                    },
                 },
             },
         },
@@ -271,9 +282,9 @@ export const projectDashboardByprojectId = async (req, res) => {
     const actualCost = projectWithTasks.actualCost;
     const scheduleTrend = projectWithTasks.scheduleTrend;
     const budgetTrend = projectWithTasks.budgetTrend;
-    const projectProgression = await prisma.project.projectProgression(projectId);
+    const projectProgression = await prisma.project.projectProgression(projectId, req.tenantId, organisationId);
     // CPI
-    const cpi = await calculationCPI(projectWithTasks, req.tenantId);
+    const cpi = await calculationCPI(projectWithTasks, req.tenantId, organisationId);
     // SPI
     const spi = await calculationSPI(req.tenantId, organisationId, projectWithTasks.projectId);
     // Project Date's

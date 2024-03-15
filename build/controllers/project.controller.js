@@ -173,7 +173,7 @@ export const getProjects = async (req, res) => {
     // progressionPercentage for all projects
     const projectsWithProgression = [];
     for (const project of projects) {
-        const progressionPercentage = await prisma.project.projectProgression(project.projectId);
+        const progressionPercentage = await prisma.project.projectProgression(project.projectId, req.tenantId, req.organisationId);
         const projectManager = await prisma.projectAssignUsers.findMany({
             where: {
                 projectId: project.projectId,
@@ -257,7 +257,7 @@ export const getProjectById = async (req, res) => {
         ? 0
         : await calculateProjectDuration(projects.startDate, projects.actualEndDate, req.tenantId, req.organisationId);
     const actualDuration = actualDurationWithCondition;
-    const progressionPercentage = await prisma.project.projectProgression(projectId);
+    const progressionPercentage = await prisma.project.projectProgression(projectId, req.tenantId, req.organisationId);
     const estimatedDuration = await calculateProjectDuration(projects.startDate, projects.estimatedEndDate, req.tenantId, req.organisationId);
     const actualEndDate = projects.tasks.length === 0 ? null : projects.actualEndDate;
     const response = { ...projects, progressionPercentage, actualDuration, estimatedDuration, actualEndDate };

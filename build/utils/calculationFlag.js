@@ -1,28 +1,26 @@
-import { TaskStatusEnum } from "@prisma/client";
 import { getClientByTenantId } from "../config/db.js";
 import { getDayAbbreviation } from "./getDatAbbreviation.js";
 import { isHoliday } from "./checkIsHoliday.js";
 import { taskEndDate } from "./calcualteTaskEndDate.js";
+import { calculationSubTaskProgression } from "./calculationSubTaskProgression.js";
 export async function calculationTPI(task, tenantId, organisationId) {
-    let { duration, completionPecentage, startDate, status } = task;
-    if (status === TaskStatusEnum.NOT_STARTED) {
-        return {
-            tpiValue: 0,
-            tpiFlag: "Green",
-        };
-    }
-    if (!completionPecentage) {
-        completionPecentage = 0;
-    }
+    let { duration, startDate, status } = task;
+    const completionPecentage = (await calculationSubTaskProgression(task, tenantId, organisationId)) ?? 0;
     const currentDate = new Date();
     const taskStartDate = new Date(startDate);
+    if (currentDate <= taskStartDate) {
+        return {
+            tpiValue: 1,
+            tpiFlag: "Green"
+        };
+    }
     const endDate = await taskEndDate(task, tenantId, organisationId);
     const effectiveDate = currentDate > new Date(endDate) ? new Date(endDate) : currentDate;
     effectiveDate.setUTCHours(0, 0, 0, 0);
     taskStartDate.setUTCHours(0, 0, 0, 0);
     const remainingDuration = await excludeNonWorkingDays(effectiveDate, taskStartDate, tenantId, organisationId);
     const plannedProgress = (remainingDuration / duration) * 100;
-    const tpi = plannedProgress !== 0 ? completionPecentage / plannedProgress : 0;
+    const tpi = Number(completionPecentage) / plannedProgress;
     let flag;
     if (tpi < 0.8) {
         flag = "Red";
@@ -67,7 +65,7 @@ export const excludeNonWorkingDays = async (currentDate, startDate, tenantId, or
         const dayOfWeek = date.getDay();
         const dayAbbreviation = getDayAbbreviation(dayOfWeek);
         // Check if it's a working day (not a holiday and not in non-working days)
-        if (!nonWorkingDays.includes(dayAbbreviation) &&
+        if (!nonWorkingDays.includes(dayAbbreviation) ||
             !isHoliday(date, holidays)) {
             remainingDuration++;
         }

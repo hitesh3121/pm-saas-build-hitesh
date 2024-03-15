@@ -27,7 +27,7 @@ export const calculateProjectDuration = async (startDate, endDate, tenantId, org
     while (currentDate <= endDateUpdated) {
         const dayOfWeek = currentDate.getDay();
         const dayAbbreviation = getDayAbbreviation(dayOfWeek);
-        if (!nonWorkingDays.includes(dayAbbreviation) &&
+        if (!nonWorkingDays.includes(dayAbbreviation) ||
             !isHoliday(currentDate, holidays)) {
             duration++;
         }
