@@ -88,7 +88,7 @@ export const calculateDuration = async (startDate, endDate, tenantId, organisati
     while (start < end) {
         const dayOfWeek = start.getUTCDay();
         const dayAbbreviation = getDayAbbreviation(dayOfWeek).toUpperCase();
-        if (!nonWorkingDays.includes(dayAbbreviation) ||
+        if (!nonWorkingDays.includes(dayAbbreviation) &&
             !isHoliday(start, holidays)) {
             duration++;
         }
