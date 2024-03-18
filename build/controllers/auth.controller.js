@@ -73,9 +73,19 @@ export const signUp = async (req, res) => {
     const token = createJwtToken(tokenPayload);
     const refreshToken = createJwtToken(tokenPayload, true);
     const otpValue = generateOTP();
-    const subjectMessage = `Login OTP`;
+    const subjectMessage = `ProjectChef : One Time Password`;
     const expiresInMinutes = 10;
-    const bodyMessage = `Here is your login OTP : ${otpValue}, OTP is valid for ${expiresInMinutes} minutes`;
+    const bodyMessage = `
+      Hello,
+
+      Kindly find here your One Time Passowrd : ${otpValue}.
+      Please do not share this number with anyone.
+      This number is valid for ${expiresInMinutes} minutes.
+
+      Best Regards,
+      ProjectChef Support Team
+
+      `;
     await OtpService.saveOTP(otpValue, userId, req.tenantId, expiresInMinutes * 60);
     try {
         await EmailService.sendEmail(email, subjectMessage, bodyMessage);
@@ -146,9 +156,19 @@ export const login = async (req, res) => {
         // Generate and save verify otp
         if (!user.isVerified) {
             const otpValue = generateOTP();
-            const subjectMessage = `Login OTP`;
+            const subjectMessage = `ProjectChef : One Time Password`;
             const expiresInMinutes = 5;
-            const bodyMessage = `Here is your login OTP : ${otpValue}, OTP is valid for ${expiresInMinutes} minutes`;
+            const bodyMessage = `
+      Hello,
+
+      Kindly find here your One Time Passowrd : ${otpValue}.
+      Please do not share this number with anyone.
+      This number is valid for ${expiresInMinutes} minutes.
+
+      Best Regards,
+      ProjectChef Support Team
+
+      `;
             try {
                 await OtpService.saveOTP(otpValue, user.userId, req.tenantId, expiresInMinutes * 60);
                 await EmailService.sendEmail(user.email, subjectMessage, bodyMessage);
@@ -201,11 +221,19 @@ export const forgotPassword = async (req, res) => {
         throw new NotFoundError("User not found");
     const expiryTimeInMinutes = 10;
     const expirationTime = new Date(Date.now() + expiryTimeInMinutes * 60 * 1000);
-    const subjectMessage = `Forgot password`;
+    const subjectMessage = `Reset your ProjectChef password`;
     const bodyMessage = `
-    We received a request to reset the password for this account : ${email}. To proceed with the password reset, 
-    please click on the following link:
-    URL: ${settings.appURL}/reset-password/?token=${token}`;
+  Hello,
+
+  We have received your request for password reset for ProjectChef on this account : ${email}. 
+  If you don't want to reset your password, you can ignore this email.
+  If you have received this email in error or you suspect fraud, please let us know at support@projectchef.io
+  URL: ${settings.appURL}/reset-password/?token=${token}
+  
+  Best Regards,
+  ProjectChef Support Team
+
+  `;
     try {
         await EmailService.sendEmail(email, subjectMessage, bodyMessage);
         await prisma.resetPassword.create({

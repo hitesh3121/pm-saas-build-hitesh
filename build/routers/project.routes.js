@@ -26,4 +26,5 @@ router.put("/:projectId", roleMiddleware([UserRoleEnum.ADMINISTRATOR, UserRoleEn
 router.put("consumed-budget/:projectId", roleMiddleware([UserRoleEnum.ADMINISTRATOR, UserRoleEnum.PROJECT_MANAGER]), ProjectController.addConsumedBudgetToProject);
 router.post("/add-assignee/:projectId", roleMiddleware([UserRoleEnum.ADMINISTRATOR, UserRoleEnum.PROJECT_MANAGER]), ProjectController.assignedUserToProject);
 router.delete("/remove-assignee/:projectAssignUsersId", roleMiddleware([UserRoleEnum.ADMINISTRATOR, UserRoleEnum.PROJECT_MANAGER]), ProjectController.deleteAssignedUserFromProject);
+router.put("/projectAssgined/role-update/:projectAssignUsersId", roleMiddleware([UserRoleEnum.ADMINISTRATOR, UserRoleEnum.PROJECT_MANAGER]), ProjectController.updateProjectRole);
 export default router;

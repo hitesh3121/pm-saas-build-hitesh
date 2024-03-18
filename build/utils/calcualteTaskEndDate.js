@@ -53,14 +53,14 @@ export const calculateEndDate = async (startDate, duration, tenantId, organisati
     let remainingDuration = duration;
     const startDayOfWeek = endDate.getUTCDay();
     const startDayAbbreviation = getDayAbbreviation(startDayOfWeek).toUpperCase();
-    if (!nonWorkingDays.includes(startDayAbbreviation) || !isHoliday(endDate, holidays)) {
+    if (!nonWorkingDays.includes(startDayAbbreviation) && !isHoliday(endDate, holidays)) {
         remainingDuration--;
     }
     while (remainingDuration > 0) {
         endDate.setDate(endDate.getDate() + 1);
         const dayOfWeek = endDate.getUTCDay();
         const dayAbbreviation = getDayAbbreviation(dayOfWeek).toUpperCase();
-        if (!nonWorkingDays.includes(dayAbbreviation) || !isHoliday(endDate, holidays)) {
+        if (!nonWorkingDays.includes(dayAbbreviation) && !isHoliday(endDate, holidays)) {
             remainingDuration--;
         }
     }

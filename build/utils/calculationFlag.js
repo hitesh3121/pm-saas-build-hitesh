@@ -65,7 +65,7 @@ export const excludeNonWorkingDays = async (currentDate, startDate, tenantId, or
         const dayOfWeek = date.getDay();
         const dayAbbreviation = getDayAbbreviation(dayOfWeek);
         // Check if it's a working day (not a holiday and not in non-working days)
-        if (!nonWorkingDays.includes(dayAbbreviation) ||
+        if (!nonWorkingDays.includes(dayAbbreviation) &&
             !isHoliday(date, holidays)) {
             remainingDuration++;
         }

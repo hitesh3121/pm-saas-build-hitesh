@@ -3,7 +3,7 @@ import { BadRequestError, NotFoundError, SuccessResponse, UnAuthorizedError } fr
 import { StatusCodes } from 'http-status-codes';
 import { projectIdSchema } from '../schemas/projectSchema.js';
 import { createCommentTaskSchema, createTaskSchema, attachmentTaskSchema, taskStatusSchema, updateTaskSchema, assginedToUserIdSchema, dependenciesTaskSchema, milestoneTaskSchema } from '../schemas/taskSchema.js';
-import { NotificationTypeEnum, ProjectStatusEnum, TaskStatusEnum, UserStatusEnum } from '@prisma/client';
+import { NotificationTypeEnum, TaskStatusEnum, UserStatusEnum } from '@prisma/client';
 import { AwsUploadService } from '../services/aws.services.js';
 import { uuidSchema } from '../schemas/commonSchema.js';
 import { MilestoneIndicatorStatusEnum } from '@prisma/client';
@@ -14,6 +14,7 @@ import { selectUserFields } from '../utils/selectedFieldsOfUsers.js';
 import { calculationSubTaskProgression } from '../utils/calculationSubTaskProgression.js';
 import { taskFlag } from '../utils/calculationFlag.js';
 import { calculateProjectEndDate } from '../utils/calculateProjectEndDate.js';
+import { checkTaskStatus } from '../utils/taskRecursion.js';
 export const getTasks = async (req, res) => {
     if (!req.organisationId) {
         throw new BadRequestError("organisationId not found!!");
@@ -127,6 +128,9 @@ export const createTask = async (req, res) => {
     if (!req.userId) {
         throw new BadRequestError("userId not found!!");
     }
+    if (!req.organisationId) {
+        throw new BadRequestError("organisationId not found!!");
+    }
     const { taskName, taskDescription, startDate, duration } = createTaskSchema.parse(req.body);
     const projectId = projectIdSchema.parse(req.params.projectId);
     const prisma = await getClientByTenantId(req.tenantId);
@@ -207,6 +211,7 @@ export const createTask = async (req, res) => {
     for (const entry of fieldEntries) {
         await prisma.history.createHistory(req.userId, HistoryTypeEnumValue.TASK, entry.message, entry.value, parentTaskId ? parentTaskId : task.taskId);
     }
+    const statusHandle = await checkTaskStatus(task.taskId, req.tenantId, req.organisationId);
     const finalResponse = { ...task };
     return new SuccessResponse(StatusCodes.CREATED, finalResponse, "task created successfully").send(res);
 };
@@ -269,21 +274,6 @@ export const updateTask = async (req, res) => {
                 },
             },
         });
-        // const notCompletedSubTasks = await prisma.task.count({
-        //   where: {
-        //     taskId: taskUpdateDB.parent?.taskId,
-        //     deletedAt: null,
-        //     subtasks: {
-        //       some: {
-        //         deletedAt: null,
-        //         status: {
-        //           notIn: [TaskStatusEnum.NOT_STARTED, TaskStatusEnum.IN_PROGRESS],
-        //         },
-        //       },
-        //     },
-        //   },
-        // });
-        // console.log({notCompletedSubTasks})
         if (findTaskForDuration) {
             const completionPecentage = await calculationSubTaskProgression(findTaskForDuration, req.tenantId, req.organisationId);
             const durationForParents = await calculateDuration(taskTimeline.earliestStartDate, taskTimeline.highestEndDate, req.tenantId, req.organisationId);
@@ -403,25 +393,6 @@ export const updateTask = async (req, res) => {
             },
         });
     }
-    // Handle project status based on task update
-    if (taskUpdateValue.completionPecentage) {
-        await prisma.$transaction([
-            prisma.project.update({
-                where: {
-                    projectId: taskUpdateDB.project.projectId,
-                },
-                data: {
-                    status: ProjectStatusEnum.ACTIVE,
-                },
-            }),
-            prisma.task.update({
-                where: { taskId },
-                data: {
-                    status: TaskStatusEnum.IN_PROGRESS,
-                },
-            }),
-        ]);
-    }
     // History-Manage
     const updatedValueWithoutOtherTable = removeProperties(taskUpdateDB, [
         "documentAttachments",
@@ -453,6 +424,7 @@ export const updateTask = async (req, res) => {
             }
         }
     }
+    const statusHandle = await checkTaskStatus(taskId, req.tenantId, req.organisationId);
     const finalResponse = { ...taskUpdateDB };
     return new SuccessResponse(StatusCodes.OK, finalResponse, "task updated successfully").send(res);
 };
@@ -483,6 +455,10 @@ export const statusChangeTask = async (req, res) => {
         throw new BadRequestError('userId not found!!');
     }
     ;
+    if (!req.organisationId) {
+        throw new BadRequestError('organisationId not found!!');
+    }
+    ;
     const taskId = uuidSchema.parse(req.params.taskId);
     const statusBody = taskStatusSchema.parse(req.body);
     const prisma = await getClientByTenantId(req.tenantId);
@@ -492,8 +468,11 @@ export const statusChangeTask = async (req, res) => {
         if (statusBody.status === TaskStatusEnum.COMPLETED) {
             completionPercentage = 100;
         }
-        else if (findTask.milestoneIndicator && TaskStatusEnum.NOT_STARTED) {
+        else if (findTask.milestoneIndicator && statusBody.status === TaskStatusEnum.NOT_STARTED) {
             completionPercentage = 0;
+        }
+        else if (statusBody.status === TaskStatusEnum.IN_PROGRESS) {
+            completionPercentage = 50;
         }
         let updatedTask = await prisma.task.update({
             where: { taskId: taskId },
@@ -513,6 +492,7 @@ export const statusChangeTask = async (req, res) => {
             newValue: statusBody.status,
         };
         await prisma.history.createHistory(req.userId, HistoryTypeEnumValue.TASK, historyMessage, historyData, taskId);
+        const statusHandle = await checkTaskStatus(taskId, req.tenantId, req.organisationId);
         return new SuccessResponse(StatusCodes.OK, updatedTask, "task status change successfully").send(res);
     }
     ;
