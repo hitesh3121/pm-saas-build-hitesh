@@ -338,9 +338,10 @@ export const projectDashboardByprojectId = async (req, res) => {
             },
         },
     });
-    const reCalculateBudget = Math.round(Number(projectWithTasks.estimatedBudget) / cpi);
-    const budgetVariation = reCalculateBudget - Math.round(Number(projectWithTasks.estimatedBudget));
-    const reCalculatedDuration = Math.round(estimatedDuration / spi);
+    const reCalculateBudgetArround = Number(projectWithTasks.estimatedBudget) / Number(cpi.toFixed(2));
+    const reCalculateBudget = reCalculateBudgetArround.toFixed(2);
+    const budgetVariation = Number(reCalculateBudget) - Math.round(Number(projectWithTasks.estimatedBudget));
+    const reCalculatedDuration = Math.round(estimatedDuration / Number(spi.toFixed(2)));
     const reCalculateEndDate = new Date(projectWithTasks.startDate.getTime() +
         (reCalculatedDuration - 1) * 24 * 60 * 60 * 1000);
     const keyPerformanceIndicator = {

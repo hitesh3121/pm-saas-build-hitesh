@@ -10,7 +10,7 @@ export async function calculationSubTaskProgression(task, tenantId, organisation
             averagesSumOfDurationTask += value.duration * settings.hours * 100;
         }
         const finalPercentage = completionPecentageOrDurationTask / averagesSumOfDurationTask * 100;
-        return (finalPercentage.toFixed(2));
+        return Math.round(Number(finalPercentage.toFixed(2)));
     }
     else {
         const completionPercentage = task.completionPecentage;
@@ -18,7 +18,7 @@ export async function calculationSubTaskProgression(task, tenantId, organisation
             return 0;
         }
         else {
-            return completionPercentage.toFixed(2);
+            return Math.round(Number(completionPercentage.toFixed(2)));
         }
     }
 }
