@@ -2,6 +2,7 @@ import { ProjectStatusEnum, TaskStatusEnum } from "@prisma/client";
 import { getClientByTenantId } from "../config/db.js";
 import { calculationSubTaskProgression } from "./calculationSubTaskProgression.js";
 import { calculateDuration } from "./calcualteTaskEndDate.js";
+import { calculateEndDate } from "./calcualteTaskEndDate.js";
 export const checkTaskStatus = async (taskId, tenantId, organisationId) => {
     const prisma = await getClientByTenantId(tenantId);
     const findTask = await prisma.task.findFirst({
@@ -66,7 +67,7 @@ export const checkTaskStatus = async (taskId, tenantId, organisationId) => {
 };
 export async function calculateDurationAndPercentage(taskId, tenantId, organisationId) {
     const prisma = await getClientByTenantId(tenantId);
-    const taskTimeline = await timeline(taskId, tenantId);
+    const taskTimeline = await timeline(taskId, tenantId, organisationId);
     const findTask = await prisma.task.findFirstOrThrow({
         where: { taskId, deletedAt: null },
         include: {
@@ -103,28 +104,15 @@ export async function calculateDurationAndPercentage(taskId, tenantId, organisat
         }
     }
 }
-export const timeline = async (taskId, tenantId) => {
+export const timeline = async (taskId, tenantId, organisationId) => {
     const prisma = await getClientByTenantId(tenantId);
-    const task = await prisma.task.findFirst({
+    const task = await prisma.task.findFirstOrThrow({
         where: { taskId, deletedAt: null },
         include: {
-            subtasks: {
-                where: { deletedAt: null },
-                include: {
-                    subtasks: {
-                        where: { deletedAt: null },
-                        include: {
-                            subtasks: true,
-                        },
-                    },
-                },
-            },
+            subtasks: true
         },
         orderBy: { startDate: "asc" },
     });
-    if (!task) {
-        return { earliestStartDate: null, highestEndDate: null };
-    }
     if (task.subtasks.length === 0) {
         let endDate = new Date(task.startDate);
         endDate.setDate(endDate.getDate() + task.duration);
@@ -133,11 +121,10 @@ export const timeline = async (taskId, tenantId) => {
     let highestEndDate = null;
     let earliestStartDate = null;
     if (task.subtasks.length > 0) {
-        task.subtasks.forEach((subtask) => {
-            let subtaskEndDate = new Date(subtask.startDate);
-            subtaskEndDate.setDate(subtaskEndDate.getDate() + subtask.duration);
-            if (!highestEndDate || subtaskEndDate > highestEndDate) {
-                highestEndDate = subtaskEndDate;
+        for (const subtask of task.subtasks) {
+            const endDate = await calculateEndDate(subtask.startDate, subtask.duration, tenantId, organisationId);
+            if (!highestEndDate || endDate > highestEndDate) {
+                highestEndDate = endDate;
             }
             if (!earliestStartDate) {
                 earliestStartDate = subtask.startDate;
@@ -145,7 +132,7 @@ export const timeline = async (taskId, tenantId) => {
             else if (earliestStartDate && subtask.startDate < earliestStartDate) {
                 earliestStartDate = subtask.startDate;
             }
-        });
+        }
     }
     return { earliestStartDate, highestEndDate };
 };
