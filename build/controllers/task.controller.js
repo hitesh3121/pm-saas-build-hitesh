@@ -51,10 +51,11 @@ export const getTasks = async (req, res) => {
     const finalArray = await Promise.all(tasks.map(async (task) => {
         const endDate = await taskEndDate(task, req.tenantId, organisationId);
         const completionPecentage = await calculationSubTaskProgression(task, req.tenantId, organisationId) ?? 0;
-        const flag = await taskFlag(task, req.tenantId, organisationId);
+        const { flag, delay } = await taskFlag(task, req.tenantId, organisationId);
         const updatedTask = {
             ...task,
             flag,
+            delay,
             endDate,
             completionPecentage,
         };
@@ -120,8 +121,8 @@ export const getTaskById = async (req, res) => {
     });
     const endDate = await taskEndDate(task, req.tenantId, req.organisationId);
     const completionPecentage = await calculationSubTaskProgression(task, req.tenantId, req.organisationId) ?? 0;
-    const flag = await taskFlag(task, req.tenantId, req.organisationId);
-    const finalResponse = { ...task, completionPecentage, flag, endDate };
+    const { flag, delay } = await taskFlag(task, req.tenantId, req.organisationId);
+    const finalResponse = { ...task, completionPecentage, flag, endDate, delay };
     return new SuccessResponse(StatusCodes.OK, finalResponse, "task selected").send(res);
 };
 export const createTask = async (req, res) => {

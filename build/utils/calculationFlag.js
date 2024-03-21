@@ -40,10 +40,10 @@ export async function taskFlag(task, tenantId, organisationId) {
     const { milestoneIndicator } = task;
     const tpi = await calculationTPI(task, tenantId, organisationId);
     if (milestoneIndicator) {
-        return tpi.tpiValue < 1 ? "Red" : "Green";
+        return { flag: tpi.tpiValue < 1 ? "Red" : "Green", delay: tpi.tpiValue }; //tpi.tpiValue < 1 ? "Red" : "Green";
     }
     else {
-        return tpi.tpiFlag;
+        return { flag: tpi.tpiFlag, delay: tpi.tpiValue };
     }
 }
 export const excludeNonWorkingDays = async (currentDate, startDate, tenantId, organisationId) => {

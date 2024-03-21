@@ -339,11 +339,14 @@ export const projectDashboardByprojectId = async (req, res) => {
             },
         },
     });
-    const reCalculateBudgetArround = Number(projectWithTasks.estimatedBudget) / cpi;
-    const reCalculateBudget = reCalculateBudgetArround;
-    const budgetVariation = Number(reCalculateBudget) - Number(projectWithTasks.estimatedBudget);
-    const reCalculatedDuration = Math.round(estimatedDuration / spi);
-    const reCalculateEndDate = await calculateEndDateFromStartDateAndDuration(projectWithTasks.startDate, reCalculatedDuration - 1, req.tenantId, req.organisationId);
+    const reCalculateBudget = cpi !== 0 ? Number(projectWithTasks.estimatedBudget) / cpi : 0;
+    const budgetVariation = cpi !== 0
+        ? Number(reCalculateBudget) - Number(projectWithTasks.estimatedBudget)
+        : null;
+    const reCalculatedDuration = spi !== 0 ? Math.round(estimatedDuration / spi) : 0;
+    const reCalculateEndDate = reCalculatedDuration !== 0
+        ? await calculateEndDateFromStartDateAndDuration(projectWithTasks.startDate, reCalculatedDuration - 1, req.tenantId, req.organisationId)
+        : null;
     const keyPerformanceIndicator = {
         reCalculateBudget,
         budgetVariation,
