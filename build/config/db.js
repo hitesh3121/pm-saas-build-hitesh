@@ -163,52 +163,6 @@ function generatePrismaClient(datasourceUrl) {
                     endDate.setHours(startDateObj.getHours() + fractionalPartInHours);
                     return endDate;
                 },
-                async getSubtasksTimeline(taskId) {
-                    const task = await client.task.findFirst({
-                        where: { taskId, deletedAt: null },
-                        include: {
-                            subtasks: {
-                                where: { deletedAt: null },
-                                include: {
-                                    subtasks: {
-                                        where: { deletedAt: null },
-                                        include: {
-                                            subtasks: true,
-                                        },
-                                    },
-                                },
-                            },
-                        },
-                        orderBy: { startDate: "asc" },
-                    });
-                    if (!task) {
-                        return { earliestStartDate: null, highestEndDate: null };
-                    }
-                    if (task.subtasks.length === 0) {
-                        let endDate = new Date(task.startDate);
-                        endDate.setDate(endDate.getDate() + task.duration);
-                        return { earliestStartDate: task.startDate, highestEndDate: endDate };
-                    }
-                    let highestEndDate = null;
-                    let earliestStartDate = null;
-                    if (task.subtasks.length > 0) {
-                        task.subtasks.forEach((subtask) => {
-                            const subtaskEndDate = new Date(subtask.startDate);
-                            subtaskEndDate.setDate(subtaskEndDate.getDate() + subtask.duration);
-                            if (!highestEndDate || subtaskEndDate > highestEndDate) {
-                                highestEndDate = subtaskEndDate;
-                            }
-                            if (!earliestStartDate) {
-                                earliestStartDate = subtask.startDate;
-                            }
-                            else if (earliestStartDate &&
-                                subtask.startDate < earliestStartDate) {
-                                earliestStartDate = subtask.startDate;
-                            }
-                        });
-                    }
-                    return { earliestStartDate, highestEndDate };
-                },
             },
             comments: {
                 async canEditOrDelete(commentId, userId) {

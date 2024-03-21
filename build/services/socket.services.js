@@ -7,10 +7,10 @@ export class RegisterSocketServices {
         this.io.sockets.on("connection", (socket) => {
             socket.on("join", async (userId) => {
                 socket.join(userId);
-                socket.to(userId).emit("notification", {
-                    id: 4,
-                    message: "You are added in task 1",
-                });
+                // socket.to(userId).emit("notification", {
+                //   id: 4,
+                //   message: "You are added in task 1",
+                // });
             });
             socket.on("disconnect", () => { });
         });

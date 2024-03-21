@@ -7,6 +7,7 @@ import { calculationSPI } from "../utils/calculateSPI.js";
 import { calculationCPI } from "../utils/calculateCPI.js";
 import { calculationTPI } from "../utils/calculationFlag.js";
 import { calculateProjectDuration } from "../utils/calculateProjectDuration.js";
+import { calculateEndDateFromStartDateAndDuration } from "../utils/calculateEndDateFromDuration.js";
 export const projectManagerProjects = async (req, res) => {
     if (!req.organisationId) {
         throw new BadRequestError("OrganisationId not found!");
@@ -338,18 +339,18 @@ export const projectDashboardByprojectId = async (req, res) => {
             },
         },
     });
-    const reCalculateBudgetArround = Number(projectWithTasks.estimatedBudget) / Number(cpi.toFixed(2));
-    const reCalculateBudget = reCalculateBudgetArround.toFixed(2);
-    const budgetVariation = Number(reCalculateBudget) - Math.round(Number(projectWithTasks.estimatedBudget));
-    const reCalculatedDuration = Math.round(estimatedDuration / Number(spi.toFixed(2)));
-    const reCalculateEndDate = new Date(projectWithTasks.startDate.getTime() +
-        (reCalculatedDuration - 1) * 24 * 60 * 60 * 1000);
+    const reCalculateBudgetArround = Number(projectWithTasks.estimatedBudget) / cpi;
+    const reCalculateBudget = reCalculateBudgetArround;
+    const budgetVariation = Number(reCalculateBudget) - Number(projectWithTasks.estimatedBudget);
+    const reCalculatedDuration = Math.round(estimatedDuration / spi);
+    const reCalculateEndDate = await calculateEndDateFromStartDateAndDuration(projectWithTasks.startDate, reCalculatedDuration - 1, req.tenantId, req.organisationId);
     const keyPerformanceIndicator = {
         reCalculateBudget,
         budgetVariation,
         reCalculateEndDate,
         reCalculatedDuration,
     };
+    const currency = projectWithTasks.currency;
     const response = {
         numTasks,
         numMilestones,
@@ -370,6 +371,7 @@ export const projectDashboardByprojectId = async (req, res) => {
         estimatedBudget,
         projectProgression,
         keyPerformanceIndicator,
+        currency,
     };
     return new SuccessResponse(StatusCodes.OK, response, "Portfolio for selected project").send(res);
 };

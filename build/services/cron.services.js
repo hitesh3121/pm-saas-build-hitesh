@@ -41,30 +41,30 @@ export class CronService {
                 });
                 for (const task of tasks) {
                     const endDate = await taskEndDate(task, "root", task.project.organisationId);
-                    let message = `
-                        Hello,
-
-                        Please note that these tasks are due today:
-
-                    `;
-                    if (currentDate.getDate() === new Date(endDate).getDate() &&
-                        currentDate.getMonth() === new Date(endDate).getMonth() &&
-                        currentDate.getFullYear() === new Date(endDate).getFullYear()) {
-                        message += `Task '${task.taskName}' is due today`;
-                    }
-                    message += `
-                        Best Regards,
-                        ProjectChef Support Team
-                    `;
-                    const assignedUsers = task.assignedUsers.map((user) => user);
-                    for (const user of assignedUsers) {
-                        const email = user.user.email;
-                        const userId = user.assginedToUserId;
-                        const subjectMessage = `ProjectChef : Tasks due today`;
-                        //Send Notification
-                        await prisma.notification.sendNotification(NotificationTypeEnum.TASK, message, userId, userId, task.taskId);
-                        //Send Email
-                        await EmailService.sendEmail(email, subjectMessage, message);
+                    // Convert endDate to date object
+                    const taskEndDateObj = new Date(endDate);
+                    if (currentDate.getDate() === taskEndDateObj.getDate() &&
+                        currentDate.getMonth() === taskEndDateObj.getMonth() &&
+                        currentDate.getFullYear() === taskEndDateObj.getFullYear()) {
+                        let message = `
+                Hello,
+  
+                Please note that these tasks are due today:
+                Task '${task.taskName}' is due today.
+  
+                Best Regards,
+                ProjectChef Support Team
+              `;
+                        const assignedUsers = task.assignedUsers.map((user) => user);
+                        for (const user of assignedUsers) {
+                            const email = user.user.email;
+                            const userId = user.assginedToUserId;
+                            const subjectMessage = `ProjectChef: Task Due Today`;
+                            //Send Notification
+                            await prisma.notification.sendNotification(NotificationTypeEnum.TASK, message, userId, userId, task.taskId);
+                            // Send Email
+                            await EmailService.sendEmail(email, subjectMessage, message);
+                        }
                     }
                 }
             }

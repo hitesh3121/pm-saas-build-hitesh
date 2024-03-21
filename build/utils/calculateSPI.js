@@ -67,5 +67,5 @@ export async function calculationSPI(tenantId, organisationId, projectId) {
         totalPlannedProgression += finalPlannedProgression;
     }
     const finalValue = sumOfTotalActualProgressionAndDuration / totalPlannedProgression;
-    return Number(finalValue.toFixed(2));
+    return finalValue;
 }
