@@ -549,7 +549,8 @@ export const taskAssignToUser = async (req, res) => {
             },
         },
     });
-    return new SuccessResponse(StatusCodes.OK, usersOfOrganisation, "Get project's users successfully").send(res);
+    const activeUsers = usersOfOrganisation.filter((user) => user.user.status === UserStatusEnum.ACTIVE);
+    return new SuccessResponse(StatusCodes.OK, activeUsers, "Get project's users successfully").send(res);
 };
 export const addMemberToTask = async (req, res) => {
     if (!req.userId) {

@@ -11,7 +11,8 @@ export async function calculationTPI(task, tenantId, organisationId) {
     if (currentDate <= taskStartDate) {
         return {
             tpiValue: 1,
-            tpiFlag: "Green"
+            tpiFlag: "Green",
+            plannedProgression: 100
         };
     }
     const endDate = await taskEndDate(task, tenantId, organisationId);
@@ -34,16 +35,18 @@ export async function calculationTPI(task, tenantId, organisationId) {
     return {
         tpiValue: tpi,
         tpiFlag: flag,
+        plannedProgression: plannedProgress
     };
 }
 export async function taskFlag(task, tenantId, organisationId) {
     const { milestoneIndicator } = task;
     const tpi = await calculationTPI(task, tenantId, organisationId);
+    const delay = tpi.plannedProgression - tpi.tpiValue * 100;
     if (milestoneIndicator) {
-        return { flag: tpi.tpiValue < 1 ? "Red" : "Green", delay: tpi.tpiValue }; //tpi.tpiValue < 1 ? "Red" : "Green";
+        return { flag: tpi.tpiValue < 1 ? "Red" : "Green", delay: delay };
     }
     else {
-        return { flag: tpi.tpiFlag, delay: tpi.tpiValue };
+        return { flag: tpi.tpiFlag, delay: delay };
     }
 }
 export const excludeNonWorkingDays = async (currentDate, startDate, tenantId, organisationId) => {

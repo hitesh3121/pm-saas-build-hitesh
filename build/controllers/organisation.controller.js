@@ -77,7 +77,7 @@ export const createOrganisation = async (req, res) => {
                     role: UserRoleEnum.ADMINISTRATOR,
                 },
             },
-            nonWorkingDays: ["SAT", "SUN"], // Non working days will be defualt as per sheet doc : dev_hitesh - 15-03-2024 
+            nonWorkingDays: nonWorkingDays,
         },
     });
     const findUser = await prisma.user.findFirst({
@@ -267,11 +267,6 @@ export const removeOrganisationMember = async (req, res) => {
     if (findAssignedTask.length > 0) {
         throw new BadRequestError("Pending tasks is already exists for this user!");
     }
-    const findProjectAssginToUser = await prisma.projectAssignUsers.findFirst({
-        where: {
-            assginedToUserId: findUserOrg.userId
-        }
-    });
     await prisma.$transaction([
         prisma.userOrganisation.update({
             where: { userOrganisationId },
@@ -293,11 +288,6 @@ export const removeOrganisationMember = async (req, res) => {
                     },
                 },
             },
-        }),
-        prisma.projectAssignUsers.delete({
-            where: {
-                projectAssignUsersId: findProjectAssginToUser?.projectAssignUsersId
-            }
         }),
         prisma.user.update({
             where: { userId: findUserOrg.userId },
@@ -323,6 +313,7 @@ export const removeOrganisationMember = async (req, res) => {
                 addedDependencies: true,
                 sentNotifications: true,
                 receivedNotifications: true,
+                projectAssignUsers: true
             },
         }),
     ]);

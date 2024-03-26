@@ -590,11 +590,13 @@ export const projectAssignToUser = async (req, res) => {
                     email: true,
                     firstName: true,
                     lastName: true,
+                    status: true,
                 },
             },
         },
     });
-    return new SuccessResponse(StatusCodes.OK, usersOfOrganisation, "Get organisation's users successfully").send(res);
+    const activeUsers = usersOfOrganisation.filter((userData) => userData.user?.status === UserStatusEnum.ACTIVE);
+    return new SuccessResponse(StatusCodes.OK, activeUsers, "Get organisation's users successfully").send(res);
 };
 export const duplicateProjectAndAllItsTask = async (req, res) => {
     const projectId = uuidSchema.parse(req.params.projectId);
