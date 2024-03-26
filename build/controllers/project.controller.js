@@ -559,11 +559,23 @@ export const deleteAssignedUserFromProject = async (req, res) => {
     }
     const projectAssignUsersId = uuidSchema.parse(req.params.projectAssignUsersId);
     const prisma = await getClientByTenantId(req.tenantId);
-    await prisma.projectAssignUsers.delete({
+    const findUser = await prisma.projectAssignUsers.findFirstOrThrow({
         where: {
             projectAssignUsersId,
         },
     });
+    await prisma.$transaction([
+        prisma.projectAssignUsers.delete({
+            where: {
+                projectAssignUsersId,
+            },
+        }),
+        prisma.taskAssignUsers.deleteMany({
+            where: {
+                assginedToUserId: findUser.assginedToUserId,
+            },
+        }),
+    ]);
     return new SuccessResponse(StatusCodes.OK, null, "User removed successfully").send(res);
 };
 export const projectAssignToUser = async (req, res) => {
