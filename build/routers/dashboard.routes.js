@@ -6,4 +6,5 @@ let router = express.Router();
 router.get("/projectManagerProjects", roleMiddleware([UserRoleEnum.PROJECT_MANAGER]), DashboardController.projectManagerProjects);
 router.get("/administartorProjects", roleMiddleware([UserRoleEnum.ADMINISTRATOR]), DashboardController.administartorProjects);
 router.get("/dashboardByProjectId/:projectId", DashboardController.projectDashboardByprojectId);
+router.get("/teamMemberProjects", roleMiddleware([UserRoleEnum.TEAM_MEMBER]), DashboardController.teamMemberProjects);
 export default router;

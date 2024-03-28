@@ -76,7 +76,7 @@ export const loginConsole = async (req, res) => {
         ;
         return new SuccessResponse(StatusCodes.OK, { user: infoWithoutPassword }, "Login successfully").send(res);
     }
-    throw new UnAuthorizedError();
+    throw new UnAuthorizedError("There is an error with your login/password");
 };
 export const changePassword = async (req, res) => {
     if (!req.userId) {

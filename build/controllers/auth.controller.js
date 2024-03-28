@@ -179,7 +179,7 @@ export const login = async (req, res) => {
         }
         return new SuccessResponse(StatusCodes.OK, { user: userWithoutProvider }, "Login successfully").send(res);
     }
-    throw new UnAuthorizedError();
+    throw new UnAuthorizedError("There is an error with your login/password");
 };
 export const getAccessToken = (req, res) => {
     const refreshTokenCookie = authRefreshTokenSchema.parse(req.cookies[settings.jwt.refreshTokenCookieKey]);

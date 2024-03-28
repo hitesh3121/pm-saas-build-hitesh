@@ -35,7 +35,20 @@ export const projectManagerProjects = async (req, res) => {
             ],
         },
         include: {
-            tasks: true
+            tasks: true,
+            assignedUsers: {
+                include: {
+                    user: {
+                        include: {
+                            userOrganisation: {
+                                select: {
+                                    role: true,
+                                },
+                            },
+                        },
+                    },
+                },
+            },
         }
     });
     // Calculate Number of Portfolio Projects per Status
@@ -85,18 +98,58 @@ export const projectManagerProjects = async (req, res) => {
                 data[1]++;
             }
         }
-        const actualDurationWithCondition = project.tasks.length === 0
-            ? 0
-            : await calculateProjectDuration(project.startDate, project.actualEndDate, req.tenantId, organisationId);
-        const actualDuration = actualDurationWithCondition;
-        const estimatedDuration = await calculateProjectDuration(project.startDate, project.estimatedEndDate, req.tenantId, organisationId);
+        const projectManagerInfo = await prisma.projectAssignUsers.findMany({
+            where: {
+                projectId: project.projectId,
+                user: {
+                    deletedAt: null,
+                    userOrganisation: {
+                        some: {
+                            role: {
+                                equals: UserRoleEnum.PROJECT_MANAGER,
+                            },
+                        },
+                    },
+                },
+            },
+            select: {
+                user: true,
+            },
+        });
+        const projectAdministartor = await prisma.userOrganisation.findMany({
+            where: {
+                role: {
+                    equals: UserRoleEnum.ADMINISTRATOR,
+                },
+                organisationId: req.organisationId,
+                deletedAt: null,
+            },
+            include: {
+                user: true,
+            },
+        });
+        const actualDuration = project.tasks.length != 0 && project.actualEndDate
+            ? await calculateProjectDuration(project.startDate, project.actualEndDate, req.tenantId, organisationId)
+            : 0;
+        const estimatedDuration = project.estimatedEndDate
+            ? await calculateProjectDuration(project.startDate, project.estimatedEndDate, req.tenantId, organisationId)
+            : null;
         const completedTasksCount = await prisma.task.count({
             where: {
                 projectId: project.projectId,
-                status: TaskStatusEnum.COMPLETED
-            }
+                status: TaskStatusEnum.COMPLETED,
+            },
         });
-        return { ...project, CPI, completedTasksCount, actualDuration, estimatedDuration };
+        return {
+            ...project,
+            CPI,
+            completedTasksCount,
+            actualDuration,
+            estimatedDuration,
+            projectManagerInfo: projectManagerInfo.length === 0
+                ? projectAdministartor
+                : projectManagerInfo,
+        };
     }));
     const spiData = { labels, data };
     const response = {
@@ -123,6 +176,19 @@ export const administartorProjects = async (req, res) => {
                 where: { deletedAt: null },
                 include: {
                     tasks: true,
+                    assignedUsers: {
+                        include: {
+                            user: {
+                                include: {
+                                    userOrganisation: {
+                                        select: {
+                                            role: true,
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
                 }
             },
         },
@@ -174,11 +240,12 @@ export const administartorProjects = async (req, res) => {
                 data[1]++;
             }
         }
-        const actualDurationWithCondition = project.tasks.length === 0
-            ? 0
-            : await calculateProjectDuration(project.startDate, project.actualEndDate, req.tenantId, organisationId);
-        const actualDuration = actualDurationWithCondition;
-        const estimatedDuration = await calculateProjectDuration(project.startDate, project.estimatedEndDate, req.tenantId, organisationId);
+        const actualDuration = project.tasks.length != 0 && project.actualEndDate
+            ? await calculateProjectDuration(project.startDate, project.actualEndDate, req.tenantId, organisationId)
+            : 0;
+        const estimatedDuration = project.estimatedEndDate
+            ? await calculateProjectDuration(project.startDate, project.estimatedEndDate, req.tenantId, organisationId)
+            : null;
         const completedTasksCount = await prisma.task.count({
             where: {
                 projectId: project.projectId,
@@ -222,7 +289,7 @@ export const administartorProjects = async (req, res) => {
             actualDuration,
             estimatedDuration,
             completedTasksCount,
-            projectManager: projectManagerInfo.length === 0
+            projectManagerInfo: projectManagerInfo.length === 0
                 ? projectAdministartor
                 : projectManagerInfo,
         };
@@ -236,6 +303,149 @@ export const administartorProjects = async (req, res) => {
         spiData
     };
     return new SuccessResponse(StatusCodes.OK, response, "Portfolio projects of Administrator").send(res);
+};
+export const teamMemberProjects = async (req, res) => {
+    if (!req.organisationId) {
+        throw new BadRequestError("OrganisationId not found!");
+    }
+    const userId = req.userId;
+    const organisationId = req.organisationId;
+    const prisma = await getClientByTenantId(req.tenantId);
+    const teamMemberProjects = await prisma.project.findMany({
+        where: {
+            deletedAt: null,
+            organisationId: req.organisationId,
+            assignedUsers: {
+                some: {
+                    assginedToUserId: userId,
+                },
+            },
+        },
+        include: {
+            tasks: true,
+            assignedUsers: {
+                include: {
+                    user: {
+                        include: {
+                            userOrganisation: {
+                                select: {
+                                    role: true,
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+    });
+    // Calculate Number of Portfolio Projects per Status
+    const allStatusValues = [
+        ProjectStatusEnum.NOT_STARTED,
+        ProjectStatusEnum.ACTIVE,
+        ProjectStatusEnum.ON_HOLD,
+        ProjectStatusEnum.CLOSED,
+    ];
+    const statusCounts = allStatusValues.reduce((acc, status) => {
+        acc[status] = 0;
+        return acc;
+    }, {});
+    teamMemberProjects.forEach((project) => {
+        const status = project.status;
+        statusCounts[status]++;
+    });
+    // Calculate Number of Portfolio Projects per Overall Situation
+    const overallSituationCounts = teamMemberProjects.reduce((acc, project) => {
+        const overallSituation = project.overallTrack;
+        acc[overallSituation] = (acc[overallSituation] || 0) + 1;
+        return acc;
+    }, {});
+    // Data for the status chart
+    const statusChartData = {
+        labels: Object.keys(statusCounts),
+        data: Object.values(statusCounts),
+    };
+    // Data for the overall situation chart
+    const overallSituationChartData = {
+        labels: Object.keys(overallSituationCounts),
+        data: Object.values(overallSituationCounts),
+    };
+    const labels = ["Significant delay", "On track", "Moderate delay"];
+    const data = [0, 0, 0];
+    const projects = await Promise.all(teamMemberProjects.map(async (project) => {
+        const CPI = await calculationCPI(project, req.tenantId, organisationId);
+        if (project.status === ProjectStatusEnum.ACTIVE) {
+            const spi = await calculationSPI(req.tenantId, organisationId, project.projectId);
+            if (spi < 0.8) {
+                data[0]++;
+            }
+            else if (spi < 0.95) {
+                data[2]++;
+            }
+            else {
+                data[1]++;
+            }
+        }
+        const actualDuration = project.tasks.length != 0 && project.actualEndDate
+            ? await calculateProjectDuration(project.startDate, project.actualEndDate, req.tenantId, organisationId)
+            : 0;
+        const estimatedDuration = project.estimatedEndDate
+            ? await calculateProjectDuration(project.startDate, project.estimatedEndDate, req.tenantId, organisationId)
+            : null;
+        const completedTasksCount = await prisma.task.count({
+            where: {
+                projectId: project.projectId,
+                status: TaskStatusEnum.COMPLETED,
+            },
+        });
+        const projectManagerInfo = await prisma.projectAssignUsers.findMany({
+            where: {
+                projectId: project.projectId,
+                user: {
+                    deletedAt: null,
+                    userOrganisation: {
+                        some: {
+                            role: {
+                                equals: UserRoleEnum.PROJECT_MANAGER,
+                            },
+                        },
+                    },
+                },
+            },
+            select: {
+                user: true,
+            },
+        });
+        const projectAdministartor = await prisma.userOrganisation.findMany({
+            where: {
+                role: {
+                    equals: UserRoleEnum.ADMINISTRATOR,
+                },
+                organisationId: req.organisationId,
+                deletedAt: null,
+            },
+            include: {
+                user: true,
+            },
+        });
+        return {
+            ...project,
+            CPI,
+            completedTasksCount,
+            actualDuration,
+            estimatedDuration,
+            projectManagerInfo: projectManagerInfo.length === 0
+                ? projectAdministartor
+                : projectManagerInfo,
+        };
+    }));
+    const spiData = { labels, data };
+    const response = {
+        projects,
+        statusChartData,
+        overallSituationChartData,
+        spiData,
+    };
+    return new SuccessResponse(StatusCodes.OK, response, "Portfolio projects of Team Member").send(res);
 };
 export const projectDashboardByprojectId = async (req, res) => {
     if (!req.organisationId) {
@@ -289,11 +499,12 @@ export const projectDashboardByprojectId = async (req, res) => {
     // SPI
     const spi = await calculationSPI(req.tenantId, organisationId, projectWithTasks.projectId);
     // Project Date's
-    const actualDurationWithCondition = projectWithTasks.tasks.length === 0
-        ? 0
-        : await calculateProjectDuration(projectWithTasks.startDate, projectWithTasks.actualEndDate, req.tenantId, req.organisationId);
-    const actualDuration = actualDurationWithCondition;
-    const estimatedDuration = await calculateProjectDuration(projectWithTasks.startDate, projectWithTasks.estimatedEndDate, req.tenantId, req.organisationId);
+    const actualDuration = projectWithTasks.tasks.length != 0 && projectWithTasks.actualEndDate
+        ? await calculateProjectDuration(projectWithTasks.startDate, projectWithTasks.actualEndDate, req.tenantId, organisationId)
+        : 0;
+    const estimatedDuration = projectWithTasks.estimatedEndDate
+        ? await calculateProjectDuration(projectWithTasks.startDate, projectWithTasks.estimatedEndDate, req.tenantId, organisationId)
+        : null;
     const projectDates = {
         startDate: projectWithTasks.startDate,
         estimatedEndDate: projectWithTasks.estimatedEndDate,
@@ -343,7 +554,7 @@ export const projectDashboardByprojectId = async (req, res) => {
     const budgetVariation = cpi !== 0
         ? Number(reCalculateBudget) - Number(projectWithTasks.estimatedBudget)
         : null;
-    const reCalculatedDuration = spi !== 0 ? Math.round(estimatedDuration / spi) : 0;
+    const reCalculatedDuration = spi !== 0 && estimatedDuration ? Math.round(estimatedDuration / spi) : 0;
     const reCalculateEndDate = reCalculatedDuration !== 0
         ? await calculateEndDateFromStartDateAndDuration(projectWithTasks.startDate, reCalculatedDuration - 1, req.tenantId, req.organisationId)
         : null;

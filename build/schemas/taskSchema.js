@@ -16,7 +16,7 @@ export const updateTaskSchema = z.object({
     kanbanColumnId: z.string().optional()
 });
 export const assginedToUserIdSchema = z.object({
-    assginedToUserId: z.string().uuid(),
+    assginedToUserId: z.string().uuid()
 });
 export const taskStatusSchema = z.object({
     status: z.nativeEnum(TaskStatusEnumValue),
