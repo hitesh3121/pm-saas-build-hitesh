@@ -1,7 +1,7 @@
 import { getClientByTenantId } from "../config/db.js";
 import { BadRequestError, ForbiddenError, NotFoundError, SuccessResponse, } from "../config/apiError.js";
 import { StatusCodes } from "http-status-codes";
-import { createOrganisationSchema, organisationIdSchema, updateOrganisationSchema, addMemberToOrgSchema, memberRoleSchema, reAssginedTaskSchema, assignProjectAndRoleToUserSchema, } from "../schemas/organisationSchema.js";
+import { createOrganisationSchema, organisationIdSchema, updateOrganisationSchema, addMemberToOrgSchema, memberRoleSchema, reAssginedTaskSchema, assignProjectAndRoleToUserSchema, organisationUserBlockUnblockSchema, } from "../schemas/organisationSchema.js";
 import { NotificationTypeEnum, ProjectStatusEnum, TaskStatusEnum, UserProviderTypeEnum, UserRoleEnum, UserStatusEnum } from "@prisma/client";
 import { encrypt } from "../utils/encryption.js";
 import { uuidSchema } from "../schemas/commonSchema.js";
@@ -25,9 +25,6 @@ export const getOrganisationById = async (req, res) => {
             userOrganisation: {
                 where: {
                     deletedAt: null,
-                    user: {
-                        status: UserStatusEnum.ACTIVE,
-                    },
                 },
                 select: {
                     userOrganisationId: true,
@@ -35,9 +32,6 @@ export const getOrganisationById = async (req, res) => {
                     role: true,
                     taskColour: true,
                     user: {
-                        where: {
-                            status: UserStatusEnum.ACTIVE
-                        },
                         select: selectUserFields,
                     },
                 },
@@ -709,4 +703,34 @@ export const assignProjectAndRoleToUser = async (req, res) => {
         }
     }
     return new SuccessResponse(StatusCodes.CREATED, null, "Project & role successfully assgined to user").send(res);
+};
+export const organisationUserBlockUnblock = async (req, res) => {
+    const prisma = await getClientByTenantId(req.tenantId);
+    if (!req.userId) {
+        throw new BadRequestError("userId not found!!");
+    }
+    const { organisationId, userOrganisationId } = organisationUserBlockUnblockSchema.parse(req.body);
+    const findUserOrg = await prisma.userOrganisation.findFirstOrThrow({
+        where: {
+            userOrganisationId,
+            organisationId,
+            deletedAt: null,
+        },
+        include: {
+            user: {
+                select: {
+                    status: true,
+                },
+            },
+        },
+    });
+    await prisma.user.update({
+        data: {
+            status: findUserOrg.user?.status === UserStatusEnum.INACTIVE
+                ? UserStatusEnum.ACTIVE
+                : UserStatusEnum.INACTIVE,
+        },
+        where: { userId: findUserOrg.userId },
+    });
+    return new SuccessResponse(StatusCodes.OK, null, "Status updated successfully.").send(res);
 };

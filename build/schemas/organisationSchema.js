@@ -65,3 +65,7 @@ export const assignProjectAndRoleToUserSchema = z
 export const addMemberToOrgSchema = z.object({
     email: z.string(),
 });
+export const organisationUserBlockUnblockSchema = z.object({
+    organisationId: z.string().uuid(),
+    userOrganisationId: z.string().uuid(),
+});
