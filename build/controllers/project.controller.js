@@ -1,8 +1,8 @@
 import { getClientByTenantId } from '../config/db.js';
 import { BadRequestError, NotFoundError, SuccessResponse } from '../config/apiError.js';
 import { StatusCodes } from 'http-status-codes';
-import { assginedUserProjectSchema, consumedBudgetSchema, createKanbanSchema, createProjectSchema, projectAssginedRole, projectIdSchema, projectStatusSchema, updateKanbanSchema, updateProjectSchema } from '../schemas/projectSchema.js';
-import { NotificationTypeEnum, ProjectStatusEnum, TaskStatusEnum, UserRoleEnum, UserStatusEnum } from '@prisma/client';
+import { consumedBudgetSchema, createKanbanSchema, createProjectSchema, projectAssginedRole, projectIdSchema, projectStatusSchema, updateKanbanSchema, updateProjectSchema } from '../schemas/projectSchema.js';
+import { ProjectStatusEnum, TaskStatusEnum, UserRoleEnum } from '@prisma/client';
 import { uuidSchema } from '../schemas/commonSchema.js';
 import { selectUserFields } from '../utils/selectedFieldsOfUsers.js';
 import { calculateProjectDuration } from '../utils/calculateProjectDuration.js';
@@ -13,61 +13,11 @@ export const getProjects = async (req, res) => {
     ;
     const prisma = await getClientByTenantId(req.tenantId);
     let projects;
-    const userRole = await prisma.userOrganisation.findFirst({
-        where: {
-            organisationId: req.organisationId,
-            userId: req.userId,
-        },
-        select: {
-            role: true,
-        },
-    });
-    if (!userRole) {
-        throw new BadRequestError("User role not found!!");
+    let role = req.role;
+    if (!role) {
+        return new SuccessResponse(StatusCodes.OK, [], 'get all project successfully').send(res);
     }
-    if (userRole.role === UserRoleEnum.ADMINISTRATOR) {
-        projects = await prisma.project.findMany({
-            where: {
-                organisationId: req.organisationId,
-                deletedAt: null,
-            },
-            include: {
-                tasks: true,
-                createdByUser: {
-                    select: {
-                        firstName: true,
-                        lastName: true,
-                        email: true,
-                        avatarImg: true,
-                    },
-                },
-                organisation: {
-                    include: {
-                        userOrganisation: {
-                            include: {
-                                user: true,
-                            },
-                        },
-                    },
-                },
-                assignedUsers: {
-                    include: {
-                        user: {
-                            include: {
-                                userOrganisation: {
-                                    select: {
-                                        role: true,
-                                    },
-                                },
-                            },
-                        },
-                    },
-                },
-            },
-            orderBy: { createdAt: "desc" },
-        });
-    }
-    else if (userRole.role === UserRoleEnum.PROJECT_MANAGER) {
+    if (role === UserRoleEnum.PROJECT_MANAGER) {
         projects = await prisma.project.findMany({
             where: {
                 OR: [
@@ -106,12 +56,19 @@ export const getProjects = async (req, res) => {
                     },
                 },
                 assignedUsers: {
+                    where: {
+                        user: {
+                            deletedAt: null,
+                        },
+                    },
                     include: {
                         user: {
                             include: {
                                 userOrganisation: {
+                                    where: { deletedAt: null },
                                     select: {
                                         role: true,
+                                        userOrganisationId: true,
                                     },
                                 },
                             },
@@ -122,7 +79,7 @@ export const getProjects = async (req, res) => {
             orderBy: { createdAt: "desc" },
         });
     }
-    else {
+    else if (role === UserRoleEnum.TEAM_MEMBER) {
         projects = await prisma.project.findMany({
             where: {
                 organisationId: req.organisationId,
@@ -153,12 +110,68 @@ export const getProjects = async (req, res) => {
                     },
                 },
                 assignedUsers: {
+                    where: {
+                        user: {
+                            deletedAt: null,
+                        },
+                    },
                     include: {
                         user: {
                             include: {
                                 userOrganisation: {
+                                    where: { deletedAt: null },
                                     select: {
                                         role: true,
+                                        userOrganisationId: true,
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+            orderBy: { createdAt: "desc" },
+        });
+    }
+    else {
+        projects = await prisma.project.findMany({
+            where: {
+                organisationId: req.organisationId,
+                deletedAt: null,
+            },
+            include: {
+                tasks: true,
+                createdByUser: {
+                    select: {
+                        firstName: true,
+                        lastName: true,
+                        email: true,
+                        avatarImg: true,
+                    },
+                },
+                organisation: {
+                    include: {
+                        userOrganisation: {
+                            include: {
+                                user: true,
+                            },
+                        },
+                    },
+                },
+                assignedUsers: {
+                    where: {
+                        user: {
+                            deletedAt: null,
+                        },
+                    },
+                    include: {
+                        user: {
+                            include: {
+                                userOrganisation: {
+                                    where: { deletedAt: null },
+                                    select: {
+                                        role: true,
+                                        userOrganisationId: true,
                                     },
                                 },
                             },
@@ -173,46 +186,16 @@ export const getProjects = async (req, res) => {
     const projectsWithProgression = [];
     for (const project of projects) {
         const progressionPercentage = await prisma.project.projectProgression(project.projectId, req.tenantId, req.organisationId);
-        const projectManager = await prisma.projectAssignUsers.findMany({
-            where: {
-                projectId: project.projectId,
-                user: {
-                    userOrganisation: {
-                        some: {
-                            role: {
-                                in: [UserRoleEnum.PROJECT_MANAGER],
-                            },
-                        },
-                    },
-                },
-            },
-            select: {
-                user: true,
-            },
-        });
-        const projectAdministartor = await prisma.userOrganisation.findMany({
-            where: {
-                role: {
-                    in: [UserRoleEnum.ADMINISTRATOR],
-                },
-                organisationId: req.organisationId,
-            },
-            include: {
-                user: true,
-            },
-        });
         const actualDuration = project.tasks.length != 0 && project.actualEndDate
             ? await calculateProjectDuration(project.startDate, project.actualEndDate, req.tenantId, req.organisationId)
             : 0;
         const estimatedDuration = project.estimatedEndDate
             ? await calculateProjectDuration(project.startDate, project.estimatedEndDate, req.tenantId, req.organisationId)
             : null;
-        const projectManagerInfo = projectManager.length !== 0 ? projectManager : projectAdministartor;
         const actualEndDate = project.tasks.length === 0 ? null : project.actualEndDate;
         const projectWithProgression = {
             ...project,
             progressionPercentage,
-            projectManagerInfo,
             actualDuration,
             estimatedDuration,
             actualEndDate
@@ -238,10 +221,16 @@ export const getProjectById = async (req, res) => {
                 select: selectUserFields
             },
             assignedUsers: {
+                where: {
+                    user: {
+                        deletedAt: null,
+                    }
+                },
                 include: {
                     user: {
                         include: {
                             userOrganisation: {
+                                where: { deletedAt: null },
                                 select: {
                                     role: true,
                                     jobTitle: true
@@ -300,7 +289,8 @@ export const createProject = async (req, res) => {
             currency: currency,
             assignedUsers: {
                 create: {
-                    assginedToUserId: req.userId
+                    assginedToUserId: req.userId,
+                    projectRole: UserRoleEnum.ADMINISTRATOR
                 }
             }
         }
@@ -494,64 +484,6 @@ export const addConsumedBudgetToProject = async (req, res) => {
     });
     return new SuccessResponse(StatusCodes.OK, projectUpdate, 'consumed budget updated successfully').send(res);
 };
-export const assignedUserToProject = async (req, res) => {
-    if (!req.userId) {
-        throw new BadRequestError("userId not found!!");
-    }
-    const projectId = uuidSchema.parse(req.params.projectId);
-    const prisma = await getClientByTenantId(req.tenantId);
-    const { assginedToUserId, /* projectRoleForUser */ } = assginedUserProjectSchema.parse(req.body);
-    const findUser = await prisma.user.findUnique({
-        where: {
-            userId: assginedToUserId,
-            status: UserStatusEnum.ACTIVE
-        },
-        select: {
-            userOrganisation: {
-                select: {
-                    role: true,
-                },
-            },
-        },
-    });
-    const findProjectManager = await prisma.projectAssignUsers.findMany({
-        where: {
-            projectId,
-            user: {
-                userOrganisation: {
-                    some: {
-                        role: {
-                            in: [UserRoleEnum.PROJECT_MANAGER],
-                        },
-                    },
-                },
-            },
-        },
-    });
-    if (findProjectManager &&
-        findProjectManager.length !== 0 &&
-        findUser?.userOrganisation[0]?.role === UserRoleEnum.PROJECT_MANAGER) {
-        throw new BadRequestError("Project Manager already exists!!");
-    }
-    const member = await prisma.projectAssignUsers.create({
-        data: {
-            assginedToUserId,
-            projectId,
-            // projectRole: projectRoleForUser
-        },
-        include: {
-            user: {
-                select: {
-                    email: true,
-                },
-            },
-        },
-    });
-    //Send notification
-    const message = `Project assigned to you`;
-    await prisma.notification.sendNotification(NotificationTypeEnum.PROJECT, message, assginedToUserId, req.userId, projectId);
-    return new SuccessResponse(StatusCodes.CREATED, member, "User assgined successfully").send(res);
-};
 export const deleteAssignedUserFromProject = async (req, res) => {
     if (!req.userId) {
         throw new BadRequestError("userId not found!!");
@@ -563,6 +495,23 @@ export const deleteAssignedUserFromProject = async (req, res) => {
             projectAssignUsersId,
         },
     });
+    const findAssignedTask = await prisma.task.findMany({
+        where: {
+            deletedAt: null,
+            status: {
+                notIn: [TaskStatusEnum.COMPLETED],
+            },
+            assignedUsers: {
+                some: {
+                    deletedAt: null,
+                    assginedToUserId: findUser.assginedToUserId,
+                },
+            },
+        },
+    });
+    if (findAssignedTask.length > 0) {
+        throw new BadRequestError("Pending tasks is already exists for this user!");
+    }
     await prisma.$transaction([
         prisma.projectAssignUsers.delete({
             where: {
@@ -576,38 +525,6 @@ export const deleteAssignedUserFromProject = async (req, res) => {
         }),
     ]);
     return new SuccessResponse(StatusCodes.OK, null, "User removed successfully").send(res);
-};
-export const projectAssignToUser = async (req, res) => {
-    if (!req.organisationId) {
-        throw new BadRequestError("organisationId not found!");
-    }
-    const prisma = await getClientByTenantId(req.tenantId);
-    const usersOfOrganisation = await prisma.userOrganisation.findMany({
-        where: {
-            organisationId: req.organisationId,
-            role: {
-                notIn: [UserRoleEnum.ADMINISTRATOR],
-            },
-            deletedAt: null,
-        },
-        select: {
-            role: true,
-            organisationId: true,
-            userOrganisationId: true,
-            user: {
-                select: {
-                    userId: true,
-                    avatarImg: true,
-                    email: true,
-                    firstName: true,
-                    lastName: true,
-                    status: true,
-                },
-            },
-        },
-    });
-    const activeUsers = usersOfOrganisation.filter((userData) => userData.user?.status === UserStatusEnum.ACTIVE);
-    return new SuccessResponse(StatusCodes.OK, activeUsers, "Get organisation's users successfully").send(res);
 };
 export const duplicateProjectAndAllItsTask = async (req, res) => {
     const projectId = uuidSchema.parse(req.params.projectId);

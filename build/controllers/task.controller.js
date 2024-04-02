@@ -15,6 +15,7 @@ import { calculationSubTaskProgression } from '../utils/calculationSubTaskProgre
 import { taskFlag } from '../utils/calculationFlag.js';
 import { calculateProjectEndDate } from '../utils/calculateProjectEndDate.js';
 import { calculateDurationAndPercentage, checkTaskStatus } from '../utils/taskRecursion.js';
+import { attachmentAddOrRemove, commentEditorDelete, dependenciesAddOrRemove, taskUpdateOrDelete } from '../middleware/role.middleware.js';
 export const getTasks = async (req, res) => {
     if (!req.organisationId) {
         throw new BadRequestError("organisationId not found!!");
@@ -226,18 +227,10 @@ export const updateTask = async (req, res) => {
     const taskId = uuidSchema.parse(req.params.taskId);
     const taskUpdateValue = updateTaskSchema.parse(req.body);
     const prisma = await getClientByTenantId(req.tenantId);
-    const action = await prisma.task.canEditOrDelete(taskId, req.userId);
-    if (!action) {
-        throw new UnAuthorizedError();
+    const { hasAccessIf, findtask } = await taskUpdateOrDelete(taskId, req.role, req.userId, req.tenantId);
+    if (!hasAccessIf) {
+        throw new UnAuthorizedError("You are not authorized to edit tasks which are not assigned to you");
     }
-    const findtask = await prisma.task.findFirstOrThrow({
-        where: { taskId: taskId, deletedAt: null },
-        include: {
-            documentAttachments: true,
-            assignedUsers: true,
-            subtasks: true,
-        },
-    });
     const taskUpdateDB = await prisma.task.update({
         where: { taskId: taskId },
         data: {
@@ -311,9 +304,9 @@ export const deleteTask = async (req, res) => {
     ;
     const taskId = uuidSchema.parse(req.params.taskId);
     const prisma = await getClientByTenantId(req.tenantId);
-    const action = await prisma.task.canEditOrDelete(taskId, req.userId);
-    if (!action) {
-        throw new UnAuthorizedError();
+    const { hasAccessIf, findtask } = await taskUpdateOrDelete(taskId, req.role, req.userId, req.tenantId);
+    if (!hasAccessIf) {
+        throw new UnAuthorizedError("You are not authorized to delete task");
     }
     await prisma.task.delete({
         where: { taskId },
@@ -338,44 +331,40 @@ export const statusChangeTask = async (req, res) => {
     const taskId = uuidSchema.parse(req.params.taskId);
     const statusBody = taskStatusSchema.parse(req.body);
     const prisma = await getClientByTenantId(req.tenantId);
-    const action = await prisma.task.canEditOrDelete(taskId, req.userId);
-    if (!action) {
-        throw new UnAuthorizedError();
+    const { hasAccessIf, findtask } = await taskUpdateOrDelete(taskId, req.role, req.userId, req.tenantId);
+    if (!hasAccessIf) {
+        throw new UnAuthorizedError("You are not authorized to edit tasks which are not assigned to you");
     }
-    if (taskId) {
-        const findTask = await prisma.task.findFirstOrThrow({ where: { taskId: taskId, deletedAt: null } });
-        let completionPercentage = 0;
-        if (statusBody.status === TaskStatusEnum.COMPLETED) {
-            completionPercentage = 100;
-        }
-        else if (findTask.milestoneIndicator && statusBody.status === TaskStatusEnum.NOT_STARTED) {
-            completionPercentage = 0;
-        }
-        else if (statusBody.status === TaskStatusEnum.IN_PROGRESS) {
-            completionPercentage = 50;
-        }
-        let updatedTask = await prisma.task.update({
-            where: { taskId: taskId },
-            data: {
-                status: statusBody.status,
-                milestoneStatus: statusBody.status === TaskStatusEnum.COMPLETED
-                    ? MilestoneIndicatorStatusEnum.COMPLETED
-                    : MilestoneIndicatorStatusEnum.NOT_STARTED,
-                completionPecentage: completionPercentage,
-                updatedByUserId: req.userId
-            },
-        });
-        // History-Manage
-        const historyMessage = "Task’s status was changed";
-        const historyData = {
-            oldValue: findTask.status,
-            newValue: statusBody.status,
-        };
-        await prisma.history.createHistory(req.userId, HistoryTypeEnumValue.TASK, historyMessage, historyData, taskId);
-        const statusHandle = await checkTaskStatus(taskId, req.tenantId, req.organisationId);
-        return new SuccessResponse(StatusCodes.OK, updatedTask, "task status change successfully").send(res);
+    let completionPercentage = 0;
+    if (statusBody.status === TaskStatusEnum.COMPLETED) {
+        completionPercentage = 100;
     }
-    ;
+    else if (findtask.milestoneIndicator && statusBody.status === TaskStatusEnum.NOT_STARTED) {
+        completionPercentage = 0;
+    }
+    else if (statusBody.status === TaskStatusEnum.IN_PROGRESS) {
+        completionPercentage = 50;
+    }
+    let updatedTask = await prisma.task.update({
+        where: { taskId: taskId },
+        data: {
+            status: statusBody.status,
+            milestoneStatus: statusBody.status === TaskStatusEnum.COMPLETED
+                ? MilestoneIndicatorStatusEnum.COMPLETED
+                : MilestoneIndicatorStatusEnum.NOT_STARTED,
+            completionPecentage: completionPercentage,
+            updatedByUserId: req.userId
+        },
+    });
+    // History-Manage
+    const historyMessage = "Task’s status was changed";
+    const historyData = {
+        oldValue: findtask.status,
+        newValue: statusBody.status,
+    };
+    await prisma.history.createHistory(req.userId, HistoryTypeEnumValue.TASK, historyMessage, historyData, taskId);
+    const statusHandle = await checkTaskStatus(taskId, req.tenantId, req.organisationId);
+    return new SuccessResponse(StatusCodes.OK, updatedTask, "task status change successfully").send(res);
 };
 export const statusCompletedAllTAsk = async (req, res) => {
     if (!req.userId) {
@@ -436,9 +425,9 @@ export const updateComment = async (req, res) => {
     const commentId = uuidSchema.parse(req.params.commentId);
     const { commentText } = createCommentTaskSchema.parse(req.body);
     const prisma = await getClientByTenantId(req.tenantId);
-    const action = await prisma.comments.canEditOrDelete(commentId, req.userId);
-    if (!action) {
-        throw new UnAuthorizedError();
+    const { hasAccessIf, findComment } = await commentEditorDelete(commentId, req.role, req.userId, req.tenantId);
+    if (!hasAccessIf) {
+        throw new UnAuthorizedError("You are not authorized to edit comment");
     }
     const updated = await prisma.comments.update({
         where: { commentId: commentId },
@@ -452,9 +441,9 @@ export const deleteComment = async (req, res) => {
     }
     const commentId = uuidSchema.parse(req.params.commentId);
     const prisma = await getClientByTenantId(req.tenantId);
-    const action = await prisma.comments.canEditOrDelete(commentId, req.userId);
-    if (!action) {
-        throw new UnAuthorizedError();
+    const { hasAccessIf, findComment } = await commentEditorDelete(commentId, req.role, req.userId, req.tenantId);
+    if (!hasAccessIf) {
+        throw new UnAuthorizedError("You are not authorized to delete comment");
     }
     await prisma.comments.delete({ where: { commentId } });
     return new SuccessResponse(StatusCodes.OK, null, "comment deleted successfully").send(res);
@@ -465,9 +454,9 @@ export const addAttachment = async (req, res) => {
     }
     const taskId = uuidSchema.parse(req.params.taskId);
     const prisma = await getClientByTenantId(req.tenantId);
-    const action = await prisma.task.canCreate(taskId, req.userId);
-    if (!action) {
-        throw new UnAuthorizedError();
+    const { hasAccessIf, findAttchment } = await attachmentAddOrRemove(taskId, req.role, req.userId, req.tenantId, "Add");
+    if (!hasAccessIf) {
+        throw new UnAuthorizedError("You are not authorized to add attachment");
     }
     let files = [];
     const taskAttachmentFiles = attachmentTaskSchema.parse(req.files?.taskAttachment);
@@ -505,9 +494,9 @@ export const deleteAttachment = async (req, res) => {
     }
     const attachmentId = uuidSchema.parse(req.params.attachmentId);
     const prisma = await getClientByTenantId(req.tenantId);
-    const action = await prisma.taskAttachment.canDelete(attachmentId, req.userId);
-    if (!action) {
-        throw new UnAuthorizedError();
+    const { hasAccessIf, findAttchment } = await attachmentAddOrRemove(attachmentId, req.role, req.userId, req.tenantId, "Delete");
+    if (!hasAccessIf) {
+        throw new UnAuthorizedError("You are not authorized to delete attachment");
     }
     //TODO: If Delete require on S3
     // await AwsUploadService.deleteFile(attachment.name, 'task-attachment');
@@ -535,6 +524,7 @@ export const taskAssignToUser = async (req, res) => {
             projectId,
             user: {
                 status: UserStatusEnum.ACTIVE,
+                deletedAt: null,
             },
         },
         select: {
@@ -562,9 +552,9 @@ export const addMemberToTask = async (req, res) => {
     }
     const taskId = uuidSchema.parse(req.params.taskId);
     const prisma = await getClientByTenantId(req.tenantId);
-    const action = await prisma.task.canEditOrDelete(taskId, req.userId);
-    if (!action) {
-        throw new UnAuthorizedError();
+    const { hasAccessIf, findtask } = await taskUpdateOrDelete(taskId, req.role, req.userId, req.tenantId);
+    if (!hasAccessIf) {
+        throw new UnAuthorizedError("You are not authorized to add member to task");
     }
     const { assginedToUserId } = assginedToUserIdSchema.parse(req.body);
     const member = await prisma.taskAssignUsers.create({
@@ -584,7 +574,7 @@ export const addMemberToTask = async (req, res) => {
     const message = `Task assigned to you`;
     await prisma.notification.sendNotification(NotificationTypeEnum.TASK, message, assginedToUserId, req.userId, taskId);
     // History-Manage
-    const historyMessage = "Task's assignee was added";
+    const historyMessage = "Task's assignee changed from";
     const historyData = { oldValue: null, newValue: member.user?.email };
     await prisma.history.createHistory(req.userId, HistoryTypeEnumValue.TASK, historyMessage, historyData, member.taskId);
     return new SuccessResponse(StatusCodes.CREATED, member, "Member added successfully").send(res);
@@ -607,9 +597,9 @@ export const deleteMemberFromTask = async (req, res) => {
             },
         },
     });
-    const action = await prisma.task.canEditOrDelete(findMember.taskId, req.userId);
-    if (!action) {
-        throw new UnAuthorizedError();
+    const { hasAccessIf, findtask } = await taskUpdateOrDelete(findMember.taskId, req.role, req.userId, req.tenantId);
+    if (!hasAccessIf) {
+        throw new UnAuthorizedError("You are not authorized to remove member from task");
     }
     await prisma.taskAssignUsers.delete({
         where: {
@@ -628,9 +618,9 @@ export const addDependencies = async (req, res) => {
     }
     const taskId = uuidSchema.parse(req.params.taskId);
     const prisma = await getClientByTenantId(req.tenantId);
-    const action = await prisma.task.canCreate(taskId, req.userId);
-    if (!action) {
-        throw new UnAuthorizedError();
+    const { hasAccessIf, dependencies, findTask } = await dependenciesAddOrRemove(taskId, req.role, req.userId, req.tenantId, "Add");
+    if (!hasAccessIf) {
+        throw new UnAuthorizedError("You are not authorized to add dependenices");
     }
     const { dependentType, dependendentOnTaskId } = dependenciesTaskSchema.parse(req.body);
     const findDependencies = await prisma.taskDependencies.findFirst({
@@ -669,9 +659,9 @@ export const removeDependencies = async (req, res) => {
     }
     const taskDependenciesId = uuidSchema.parse(req.params.taskDependenciesId);
     const prisma = await getClientByTenantId(req.tenantId);
-    const action = await prisma.taskDependencies.canDelete(taskDependenciesId, req.userId);
-    if (!action) {
-        throw new UnAuthorizedError();
+    const { hasAccessIf, dependencies } = await dependenciesAddOrRemove(taskDependenciesId, req.role, req.userId, req.tenantId, "Delete");
+    if (!hasAccessIf) {
+        throw new UnAuthorizedError("You are not authorized to remove dependencies");
     }
     const deletedTask = await prisma.taskDependencies.delete({
         where: {
@@ -700,9 +690,9 @@ export const addOrRemoveMilesstone = async (req, res) => {
     }
     const taskId = uuidSchema.parse(req.params.taskId);
     const prisma = await getClientByTenantId(req.tenantId);
-    const action = await prisma.task.canEditOrDelete(taskId, req.userId);
-    if (!action) {
-        throw new UnAuthorizedError();
+    const { hasAccessIf, findtask } = await taskUpdateOrDelete(taskId, req.role, req.userId, req.tenantId);
+    if (!hasAccessIf) {
+        throw new UnAuthorizedError("You are not authorized to add or remove milestone for this task");
     }
     const { milestoneIndicator } = milestoneTaskSchema.parse(req.body);
     const duration = 1; // If milestone then duration will be 1 : 23-02-2024 - dev_hitesh

@@ -101,7 +101,7 @@ function generatePrismaClient(datasourceUrl) {
                 // create action (comment-attachment-dependencies)
                 async canCreate(taskId, userId) {
                     const task = await client.task.getTaskById(taskId);
-                    const userRoles = await client.user.getUserRoles(userId);
+                    const userRoles = await client.user.getUserRoleBasedOnProject(userId);
                     const allowedRoles = [
                         UserRoleEnum.ADMINISTRATOR,
                         UserRoleEnum.PROJECT_MANAGER,
@@ -113,7 +113,7 @@ function generatePrismaClient(datasourceUrl) {
                 },
                 async canEditOrDelete(taskId, userId) {
                     const task = await client.task.getTaskById(taskId);
-                    const userRoles = await client.user.getUserRoles(userId);
+                    const userRoles = await client.user.getUserRoleBasedOnProject(userId);
                     const allowedRoles = [
                         UserRoleEnum.ADMINISTRATOR,
                         UserRoleEnum.PROJECT_MANAGER,
@@ -173,7 +173,7 @@ function generatePrismaClient(datasourceUrl) {
                             commentByUser: true,
                         },
                     });
-                    const userRoles = await client.user.getUserRoles(userId);
+                    const userRoles = await client.user.getUserRoleBasedOnProject(userId);
                     const allowedRoles = [
                         UserRoleEnum.ADMINISTRATOR,
                         UserRoleEnum.PROJECT_MANAGER,
@@ -201,7 +201,7 @@ function generatePrismaClient(datasourceUrl) {
                             },
                         },
                     });
-                    const userRoles = await client.user.getUserRoles(userId);
+                    const userRoles = await client.user.getUserRoleBasedOnProject(userId);
                     const allowedRoles = [
                         UserRoleEnum.ADMINISTRATOR,
                         UserRoleEnum.PROJECT_MANAGER,
@@ -220,12 +220,11 @@ function generatePrismaClient(datasourceUrl) {
                             deletedAt: null,
                         },
                     });
-                    const userRoles = await client.user.getUserRoles(userId);
+                    const userRoles = await client.user.getUserRoleBasedOnProject(userId);
                     const allowedRoles = [
                         UserRoleEnum.ADMINISTRATOR,
                         UserRoleEnum.PROJECT_MANAGER,
                     ];
-                    const isAdminOrProjectManager = userRoles.some((role) => allowedRoles.includes(role));
                     const isDependenciesAuthor = dependencies.dependenciesAddedBy === userId;
                     const canPerformAction = userRoles.some((role) => allowedRoles.includes(role)) ||
                         isDependenciesAuthor;
@@ -250,6 +249,14 @@ function generatePrismaClient(datasourceUrl) {
                     });
                     return user.userOrganisation.map((org) => org.role);
                 },
+                async getUserRoleBasedOnProject(userId) {
+                    const roles = await client.projectAssignUsers.findMany({
+                        where: {
+                            assginedToUserId: userId,
+                        },
+                    });
+                    return roles.map((role) => role.projectRole);
+                }
             },
         },
     });

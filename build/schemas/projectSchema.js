@@ -77,5 +77,4 @@ export const projectAssginedRole = z.object({
 });
 export const assginedUserProjectSchema = z.object({
     assginedToUserId: z.string().uuid(),
-    // projectRoleForUser: z.nativeEnum(UserRoleEnumValue)
 });

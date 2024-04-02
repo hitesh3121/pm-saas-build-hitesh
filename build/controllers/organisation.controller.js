@@ -1,7 +1,7 @@
 import { getClientByTenantId } from "../config/db.js";
 import { BadRequestError, ForbiddenError, NotFoundError, SuccessResponse, } from "../config/apiError.js";
 import { StatusCodes } from "http-status-codes";
-import { createOrganisationSchema, organisationIdSchema, updateOrganisationSchema, addOrganisationMemberSchema, memberRoleSchema, reAssginedTaskSchema, } from "../schemas/organisationSchema.js";
+import { createOrganisationSchema, organisationIdSchema, updateOrganisationSchema, addMemberToOrgSchema, memberRoleSchema, reAssginedTaskSchema, assignProjectAndRoleToUserSchema, } from "../schemas/organisationSchema.js";
 import { NotificationTypeEnum, ProjectStatusEnum, TaskStatusEnum, UserProviderTypeEnum, UserRoleEnum, UserStatusEnum } from "@prisma/client";
 import { encrypt } from "../utils/encryption.js";
 import { uuidSchema } from "../schemas/commonSchema.js";
@@ -130,12 +130,15 @@ export const updateOrganisation = async (req, res) => {
     return new SuccessResponse(StatusCodes.OK, organisationUpdate, "Organisation updated successfully").send(res);
 };
 export const addOrganisationMember = async (req, res) => {
-    const member = addOrganisationMemberSchema.parse(req.body);
+    if (!req.userId) {
+        throw new BadRequestError("userId not found!!");
+    }
+    const bodyValue = addMemberToOrgSchema.parse(req.body);
     const organisationId = uuidSchema.parse(req.params.organisationId);
     const prisma = await getClientByTenantId(req.tenantId);
     const user = await prisma.user.findFirst({
         where: {
-            email: member.email,
+            email: bodyValue.email,
         },
         include: {
             userOrganisation: {
@@ -150,7 +153,7 @@ export const addOrganisationMember = async (req, res) => {
         const hashedPassword = await encrypt(randomPassword);
         const newUser = await prisma.user.create({
             data: {
-                email: member.email,
+                email: bodyValue.email,
                 status: UserStatusEnum.ACTIVE,
                 provider: {
                     create: {
@@ -160,7 +163,6 @@ export const addOrganisationMember = async (req, res) => {
                 },
                 userOrganisation: {
                     create: {
-                        role: member.role,
                         organisationId: organisationId
                     }
                 }
@@ -178,7 +180,7 @@ export const addOrganisationMember = async (req, res) => {
             }
         });
         try {
-            const newUserOrg = newUser.userOrganisation.find(org => org.organisationId === organisationId);
+            const newUserOrg = newUser.userOrganisation.find((org) => org.organisationId === organisationId);
             let adminName;
             if (newUserOrg?.organisation?.createdByUser.firstName &&
                 newUserOrg?.organisation?.createdByUser.lastName) {
@@ -190,7 +192,7 @@ export const addOrganisationMember = async (req, res) => {
             else {
                 adminName = newUserOrg?.organisation?.createdByUser.email;
             }
-            const subjectMessage = `You’ve been Invited to ${newUserOrg?.organisation?.organisationName} organization `;
+            const subjectMessage = `You've been Invited to ${newUserOrg?.organisation?.organisationName} organization `;
             const bodyMessage = `
       Hello,
 
@@ -209,35 +211,56 @@ export const addOrganisationMember = async (req, res) => {
             await EmailService.sendEmail(newUser.email, subjectMessage, bodyMessage);
         }
         catch (error) {
-            console.error('Failed to sign up email', error);
+            console.error("Failed to sign up email", error);
         }
-        return new SuccessResponse(200, newUser).send(res);
+        return new SuccessResponse(StatusCodes.OK, newUser, "Added member successfully").send(res);
     }
     else {
-        if (user.userOrganisation.find((uo) => uo.organisationId === organisationId)) {
-            throw new ZodError([{
-                    code: 'invalid_string',
-                    message: 'User already added in your organisation',
-                    path: ['email'],
-                    validation: "email",
-                }]);
+        const userOrgDetails = user.userOrganisation.find((uo) => uo.organisationId === organisationId);
+        if (userOrgDetails) {
+            try {
+                await prisma.user.update({
+                    where: { userId: user.userId },
+                    data: {
+                        deletedAt: null,
+                        userOrganisation: {
+                            update: {
+                                where: {
+                                    userOrganisationId: userOrgDetails.userOrganisationId,
+                                    organisationId,
+                                },
+                                data: {
+                                    deletedAt: null,
+                                },
+                            },
+                        },
+                    },
+                });
+            }
+            catch (error) {
+                console.error(error);
+            }
         }
-        if (user.userOrganisation.length !== 0) {
-            throw new ZodError([{
-                    code: 'invalid_string',
-                    message: 'User is part of other organisation',
-                    path: ['email'],
-                    validation: "email",
-                }]);
+        else {
+            await prisma.userOrganisation.create({
+                data: {
+                    userId: user.userId,
+                    organisationId,
+                },
+            });
         }
-        await prisma.userOrganisation.create({
-            data: {
-                role: member.role,
-                userId: user.userId,
-                organisationId,
-            },
-        });
-        return new SuccessResponse(200, user).send(res);
+        if (userOrgDetails?.organisationId !== organisationId &&
+            user.userOrganisation.length !== 0) {
+            throw new ZodError([
+                {
+                    code: "invalid_string",
+                    message: "User is part of another organisation",
+                    path: ["email"],
+                    validation: "email",
+                },
+            ]);
+        }
+        return new SuccessResponse(StatusCodes.OK, user, "Added member successfully").send(res);
     }
 };
 export const removeOrganisationMember = async (req, res) => {
@@ -356,68 +379,78 @@ export const reassignTasksAndProjects = async (req, res) => {
     }
     const prisma = await getClientByTenantId(req.tenantId);
     const { oldUserId, newUserId } = reAssginedTaskSchema.parse(req.body);
-    const tasksToReassign = await prisma.taskAssignUsers.findMany({
+    const oldUsersTasks = await prisma.taskAssignUsers.findMany({
         where: {
             assginedToUserId: oldUserId,
             deletedAt: null,
+            task: {
+                status: TaskStatusEnum.IN_PROGRESS
+            }
         },
         include: {
             task: true,
         },
     });
-    const projectReassgin = await prisma.projectAssignUsers.findMany({
+    const oldUsersProjects = await prisma.projectAssignUsers.findMany({
         where: {
             assginedToUserId: oldUserId,
+            project: {
+                status: ProjectStatusEnum.ACTIVE
+            }
         },
         include: {
             project: true,
         }
     });
-    await prisma.$transaction(async (tx) => {
-        await Promise.all(projectReassgin.map(async (assginedUserOfProject) => {
-            const oldUser = await tx.projectAssignUsers.delete({
-                where: {
-                    projectAssignUsersId: assginedUserOfProject.projectAssignUsersId,
-                },
-                include: {
-                    user: {
-                        select: {
-                            email: true,
-                        },
-                    },
-                },
-            });
-            const projectAssign = await tx.projectAssignUsers.create({
+    for (const oldUserOfProject of oldUsersProjects) {
+        const existingAssignment = await prisma.projectAssignUsers.findFirst({
+            where: {
+                assginedToUserId: newUserId,
+                projectId: oldUserOfProject.project.projectId
+            },
+        });
+        await prisma.projectAssignUsers.delete({
+            where: { projectAssignUsersId: oldUserOfProject.projectAssignUsersId },
+        });
+        if (!existingAssignment) {
+            await prisma.projectAssignUsers.create({
                 data: {
                     assginedToUserId: newUserId,
-                    projectId: assginedUserOfProject.project.projectId,
-                },
-                include: {
-                    user: {
-                        select: {
-                            email: true,
-                        },
-                    },
+                    projectId: oldUserOfProject.project.projectId,
+                    projectRole: oldUserOfProject.projectRole
                 },
             });
-        }));
-        await Promise.all(tasksToReassign.map(async (assginedUserOfTask) => {
-            const oldUser = await tx.taskAssignUsers.delete({
-                where: {
-                    taskAssignUsersId: assginedUserOfTask.taskAssignUsersId,
-                },
-                include: {
-                    user: {
-                        select: {
-                            email: true,
-                        },
+        }
+    }
+    for (const oldUsersTask of oldUsersTasks) {
+        const existingAssignmentTask = await prisma.taskAssignUsers.findUnique({
+            where: {
+                taskAssignUsersId: newUserId,
+            },
+            include: {
+                user: {
+                    select: {
+                        email: true,
                     },
                 },
-            });
-            const member = await tx.taskAssignUsers.create({
+            },
+        });
+        const deletedUser = await prisma.taskAssignUsers.delete({
+            where: { taskAssignUsersId: oldUsersTask.taskAssignUsersId },
+            include: {
+                user: {
+                    select: {
+                        email: true,
+                    },
+                },
+            },
+        });
+        let newCreatedUser;
+        if (!existingAssignmentTask) {
+            newCreatedUser = await prisma.taskAssignUsers.create({
                 data: {
                     assginedToUserId: newUserId,
-                    taskId: assginedUserOfTask.taskId,
+                    taskId: oldUsersTask.taskId,
                 },
                 include: {
                     user: {
@@ -427,18 +460,20 @@ export const reassignTasksAndProjects = async (req, res) => {
                     },
                 },
             });
-            //Send notification
-            const message = `Task reassigned to you`;
-            await prisma.notification.sendNotification(NotificationTypeEnum.TASK, message, newUserId, userId, assginedUserOfTask.taskId);
-            // History-Manage
-            const historyMessage = "Task's assignee was added";
-            const historyData = {
-                oldValue: oldUser?.user?.email,
-                newValue: member.user?.email,
-            };
-            await prisma.history.createHistory(userId, HistoryTypeEnumValue.TASK, historyMessage, historyData, member.taskId);
-        }));
-    });
+        }
+        //Send notification
+        const message = `Task reassigned to you`;
+        await prisma.notification.sendNotification(NotificationTypeEnum.TASK, message, newUserId, userId, oldUsersTask.taskId);
+        // History-Manage
+        const historyMessage = "Task's assignee changed from";
+        const historyData = {
+            oldValue: deletedUser?.user?.email,
+            newValue: newCreatedUser
+                ? newCreatedUser.user.email
+                : existingAssignmentTask?.user.email,
+        };
+        await prisma.history.createHistory(userId, HistoryTypeEnumValue.TASK, historyMessage, historyData, oldUsersTask.taskId);
+    }
     return new SuccessResponse(StatusCodes.OK, null, "Tasks reassigned successfully.").send(res);
 };
 export const uploadHolidayCSV = async (req, res) => {
@@ -602,4 +637,76 @@ export const resendInvitationToMember = async (req, res) => {
         console.error("Failed resend email", error);
     }
     return new SuccessResponse(StatusCodes.OK, null, "Resend Invitation").send(res);
+};
+export const assignProjectAndRoleToUser = async (req, res) => {
+    if (!req.userId) {
+        throw new BadRequestError("userId not found!!");
+    }
+    const userOrganisationId = uuidSchema.parse(req.params.userOrganisationId);
+    const prisma = await getClientByTenantId(req.tenantId);
+    const bodyValue = assignProjectAndRoleToUserSchema.parse(req.body);
+    const findUserOrg = await prisma.userOrganisation.findFirstOrThrow({
+        where: {
+            userOrganisationId,
+            deletedAt: null,
+        },
+        include: {
+            user: true,
+            organisation: true,
+        },
+    });
+    const existingAssignments = await prisma.projectAssignUsers.findMany({
+        where: {
+            assginedToUserId: findUserOrg.userId,
+        },
+    });
+    const bodyProjectIds = bodyValue.map(item => item.projectId);
+    const assignmentsToDelete = existingAssignments.filter(assignment => !bodyProjectIds.includes(assignment.projectId));
+    for (const assignment of assignmentsToDelete) {
+        await prisma.projectAssignUsers.delete({
+            where: {
+                projectAssignUsersId: assignment.projectAssignUsersId,
+            },
+        });
+    }
+    for (const item of bodyValue) {
+        const checkUserExistsOrNot = await prisma.projectAssignUsers.findFirst({
+            where: {
+                assginedToUserId: findUserOrg.userId,
+                projectId: item.projectId,
+            }
+        });
+        if (checkUserExistsOrNot) {
+            const updateUserDetails = await prisma.projectAssignUsers.update({
+                where: {
+                    projectAssignUsersId: checkUserExistsOrNot.projectAssignUsersId
+                },
+                data: {
+                    projectId: item.projectId,
+                    projectRole: item.projectRoleForUser,
+                    assginedToUserId: findUserOrg.userId
+                }
+            });
+        }
+        else {
+            const member = await prisma.projectAssignUsers.create({
+                data: {
+                    assginedToUserId: findUserOrg.userId,
+                    projectId: item.projectId,
+                    projectRole: item.projectRoleForUser,
+                },
+                include: {
+                    user: {
+                        select: {
+                            email: true,
+                        },
+                    },
+                },
+            });
+            //Send notification
+            const message = `Project assigned to you`;
+            await prisma.notification.sendNotification(NotificationTypeEnum.PROJECT, message, findUserOrg.userId, req.userId, item.projectId);
+        }
+    }
+    return new SuccessResponse(StatusCodes.CREATED, null, "Project & role successfully assgined to user").send(res);
 };

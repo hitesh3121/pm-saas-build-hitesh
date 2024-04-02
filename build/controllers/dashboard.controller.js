@@ -8,49 +8,183 @@ import { calculationCPI } from "../utils/calculateCPI.js";
 import { calculationTPI } from "../utils/calculationFlag.js";
 import { calculateProjectDuration } from "../utils/calculateProjectDuration.js";
 import { calculateEndDateFromStartDateAndDuration } from "../utils/calculateEndDateFromDuration.js";
-export const projectManagerProjects = async (req, res) => {
+export const dashboardAPI = async (req, res) => {
     if (!req.organisationId) {
         throw new BadRequestError("OrganisationId not found!");
     }
     const userId = req.userId;
     const organisationId = req.organisationId;
     const prisma = await getClientByTenantId(req.tenantId);
-    const projectManagersProjects = await prisma.project.findMany({
-        where: {
-            deletedAt: null,
-            OR: [
-                {
-                    deletedAt: null,
-                    organisationId: req.organisationId,
-                    assignedUsers: {
-                        some: {
-                            assginedToUserId: userId,
+    let projectManagersProjects;
+    let role = req.role;
+    if (!role) {
+        return new SuccessResponse(StatusCodes.OK, [], 'get all project successfully').send(res);
+    }
+    if (role === UserRoleEnum.PROJECT_MANAGER) {
+        projectManagersProjects = await prisma.project.findMany({
+            where: {
+                OR: [
+                    {
+                        organisationId: req.organisationId,
+                        deletedAt: null,
+                        assignedUsers: {
+                            some: {
+                                assginedToUserId: userId,
+                            },
+                        },
+                    },
+                    {
+                        createdByUserId: userId,
+                        deletedAt: null,
+                    },
+                ],
+            },
+            include: {
+                tasks: true,
+                createdByUser: {
+                    select: {
+                        firstName: true,
+                        lastName: true,
+                        email: true,
+                        avatarImg: true,
+                    },
+                },
+                organisation: {
+                    include: {
+                        userOrganisation: {
+                            include: {
+                                user: true,
+                            },
                         },
                     },
                 },
-                {
-                    createdByUserId: userId,
-                    deletedAt: null,
-                },
-            ],
-        },
-        include: {
-            tasks: true,
-            assignedUsers: {
-                include: {
-                    user: {
-                        include: {
-                            userOrganisation: {
-                                select: {
-                                    role: true,
+                assignedUsers: {
+                    where: {
+                        user: {
+                            deletedAt: null,
+                        },
+                    },
+                    include: {
+                        user: {
+                            include: {
+                                userOrganisation: {
+                                    where: { deletedAt: null },
+                                    select: {
+                                        role: true,
+                                        userOrganisationId: true,
+                                    },
                                 },
                             },
                         },
                     },
                 },
             },
-        }
-    });
+            orderBy: { createdAt: "desc" },
+        });
+    }
+    else if (role === UserRoleEnum.TEAM_MEMBER) {
+        projectManagersProjects = await prisma.project.findMany({
+            where: {
+                organisationId: req.organisationId,
+                deletedAt: null,
+                assignedUsers: {
+                    some: {
+                        assginedToUserId: userId,
+                    },
+                },
+            },
+            include: {
+                tasks: true,
+                createdByUser: {
+                    select: {
+                        firstName: true,
+                        lastName: true,
+                        email: true,
+                        avatarImg: true,
+                    },
+                },
+                organisation: {
+                    include: {
+                        userOrganisation: {
+                            include: {
+                                user: true,
+                            },
+                        },
+                    },
+                },
+                assignedUsers: {
+                    where: {
+                        user: {
+                            deletedAt: null,
+                        },
+                    },
+                    include: {
+                        user: {
+                            include: {
+                                userOrganisation: {
+                                    where: { deletedAt: null },
+                                    select: {
+                                        role: true,
+                                        userOrganisationId: true,
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+            orderBy: { createdAt: "desc" },
+        });
+    }
+    else {
+        projectManagersProjects = await prisma.project.findMany({
+            where: {
+                organisationId: req.organisationId,
+                deletedAt: null,
+            },
+            include: {
+                tasks: true,
+                createdByUser: {
+                    select: {
+                        firstName: true,
+                        lastName: true,
+                        email: true,
+                        avatarImg: true,
+                    },
+                },
+                organisation: {
+                    include: {
+                        userOrganisation: {
+                            include: {
+                                user: true,
+                            },
+                        },
+                    },
+                },
+                assignedUsers: {
+                    where: {
+                        user: {
+                            deletedAt: null,
+                        },
+                    },
+                    include: {
+                        user: {
+                            include: {
+                                userOrganisation: {
+                                    where: { deletedAt: null },
+                                    select: {
+                                        role: true,
+                                        userOrganisationId: true,
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+            orderBy: { createdAt: "desc" },
+        });
+    }
     // Calculate Number of Portfolio Projects per Status
     const allStatusValues = [
         ProjectStatusEnum.NOT_STARTED,
@@ -98,36 +232,6 @@ export const projectManagerProjects = async (req, res) => {
                 data[1]++;
             }
         }
-        const projectManagerInfo = await prisma.projectAssignUsers.findMany({
-            where: {
-                projectId: project.projectId,
-                user: {
-                    deletedAt: null,
-                    userOrganisation: {
-                        some: {
-                            role: {
-                                equals: UserRoleEnum.PROJECT_MANAGER,
-                            },
-                        },
-                    },
-                },
-            },
-            select: {
-                user: true,
-            },
-        });
-        const projectAdministartor = await prisma.userOrganisation.findMany({
-            where: {
-                role: {
-                    equals: UserRoleEnum.ADMINISTRATOR,
-                },
-                organisationId: req.organisationId,
-                deletedAt: null,
-            },
-            include: {
-                user: true,
-            },
-        });
         const actualDuration = project.tasks.length != 0 && project.actualEndDate
             ? await calculateProjectDuration(project.startDate, project.actualEndDate, req.tenantId, organisationId)
             : 0;
@@ -146,9 +250,6 @@ export const projectManagerProjects = async (req, res) => {
             completedTasksCount,
             actualDuration,
             estimatedDuration,
-            projectManagerInfo: projectManagerInfo.length === 0
-                ? projectAdministartor
-                : projectManagerInfo,
         };
     }));
     const spiData = { labels, data };

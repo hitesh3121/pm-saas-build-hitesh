@@ -41,7 +41,10 @@ export async function calculationTPI(task, tenantId, organisationId) {
 export async function taskFlag(task, tenantId, organisationId) {
     const { milestoneIndicator } = task;
     const tpi = await calculationTPI(task, tenantId, organisationId);
-    const delay = tpi.plannedProgression - tpi.tpiValue * 100;
+    let delay = 100 - tpi.tpiValue * 100;
+    if (tpi.tpiFlag == "Green") {
+        delay = 0;
+    }
     if (milestoneIndicator) {
         return { flag: tpi.tpiValue < 1 ? "Red" : "Green", delay: delay };
     }

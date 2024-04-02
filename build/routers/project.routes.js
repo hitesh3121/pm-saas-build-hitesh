@@ -4,7 +4,6 @@ import { roleMiddleware } from "../middleware/role.middleware.js";
 import { UserRoleEnum } from "@prisma/client";
 let router = express.Router();
 router.put("/duplicate-project/:projectId", roleMiddleware([UserRoleEnum.ADMINISTRATOR, UserRoleEnum.PROJECT_MANAGER]), ProjectController.duplicateProjectAndAllItsTask);
-router.get("/org-users/", roleMiddleware([UserRoleEnum.ADMINISTRATOR, UserRoleEnum.PROJECT_MANAGER]), ProjectController.projectAssignToUser);
 router.get("/", roleMiddleware([
     UserRoleEnum.ADMINISTRATOR,
     UserRoleEnum.PROJECT_MANAGER,
@@ -24,7 +23,6 @@ router.delete("/:projectId", roleMiddleware([UserRoleEnum.ADMINISTRATOR]), Proje
 router.put("/status/:projectId", roleMiddleware([UserRoleEnum.ADMINISTRATOR, UserRoleEnum.PROJECT_MANAGER]), ProjectController.statusChangeProject);
 router.put("/:projectId", roleMiddleware([UserRoleEnum.ADMINISTRATOR, UserRoleEnum.PROJECT_MANAGER]), ProjectController.updateProject);
 router.put("consumed-budget/:projectId", roleMiddleware([UserRoleEnum.ADMINISTRATOR, UserRoleEnum.PROJECT_MANAGER]), ProjectController.addConsumedBudgetToProject);
-router.post("/add-assignee/:projectId", roleMiddleware([UserRoleEnum.ADMINISTRATOR, UserRoleEnum.PROJECT_MANAGER]), ProjectController.assignedUserToProject);
 router.delete("/remove-assignee/:projectAssignUsersId", roleMiddleware([UserRoleEnum.ADMINISTRATOR, UserRoleEnum.PROJECT_MANAGER]), ProjectController.deleteAssignedUserFromProject);
 router.put("/projectAssgined/role-update/:projectAssignUsersId", roleMiddleware([UserRoleEnum.ADMINISTRATOR, UserRoleEnum.PROJECT_MANAGER]), ProjectController.updateProjectRole);
 export default router;

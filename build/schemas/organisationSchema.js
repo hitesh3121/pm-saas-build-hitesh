@@ -38,6 +38,7 @@ export const addOrganisationMemberSchema = z.object({
     }, {
         message: "Only team member and project manager role allowed",
     }),
+    projectId: z.string().uuid().optional()
 });
 export const organisationStatuSchema = z.object({
     status: z.nativeEnum(OrgStatusEnumValue),
@@ -54,4 +55,13 @@ export const memberRoleSchema = z.object({
 export const reAssginedTaskSchema = z.object({
     oldUserId: z.string().uuid(),
     newUserId: z.string().uuid(),
+});
+export const assignProjectAndRoleToUserSchema = z
+    .object({
+    projectRoleForUser: z.nativeEnum(UserRoleEnumValue),
+    projectId: z.string().uuid(),
+})
+    .array();
+export const addMemberToOrgSchema = z.object({
+    email: z.string(),
 });

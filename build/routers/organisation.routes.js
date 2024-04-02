@@ -7,6 +7,7 @@ router.get("/:organisationId", OrganisationControlller.getOrganisationById);
 router.put("/holiday-csv/:organisationId", roleMiddleware([UserRoleEnum.ADMINISTRATOR]), OrganisationControlller.uploadHolidayCSV);
 router.post("/resend-invitation/:userOrganisationId", roleMiddleware([UserRoleEnum.ADMINISTRATOR]), OrganisationControlller.resendInvitationToMember);
 router.put("/re-assigned-task/", roleMiddleware([UserRoleEnum.ADMINISTRATOR]), OrganisationControlller.reassignTasksAndProjects);
+router.post("/assignProjectAndRoleToUser/:userOrganisationId", roleMiddleware([UserRoleEnum.ADMINISTRATOR, UserRoleEnum.PROJECT_MANAGER]), OrganisationControlller.assignProjectAndRoleToUser);
 router.post("/", OrganisationControlller.createOrganisation);
 router.post("/:organisationId/user", roleMiddleware([UserRoleEnum.ADMINISTRATOR]), OrganisationControlller.addOrganisationMember);
 router.put("/:organisationId", roleMiddleware([UserRoleEnum.ADMINISTRATOR]), OrganisationControlller.updateOrganisation);
