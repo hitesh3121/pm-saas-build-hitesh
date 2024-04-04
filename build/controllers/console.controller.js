@@ -213,13 +213,18 @@ export const deleteOperator = async (req, res) => {
     }
     const userId = uuidSchema.parse(req.params.userId);
     const prisma = await getClientByTenantId(req.tenantId);
+    const otpValue = generateOTP();
+    const findOperator = await prisma.consoleUser.findFirstOrThrow({
+        where: { userId, deletedAt: null },
+    });
     await prisma.consoleUser.update({
         where: {
             userId: userId,
         },
         data: {
-            deletedAt: new Date()
-        }
+            deletedAt: new Date(),
+            email: `${findOperator.email}_deleted_${otpValue}`,
+        },
     });
     return new SuccessResponse(StatusCodes.OK, null, "Operator deleted successfully").send(res);
 };
@@ -362,6 +367,8 @@ export const deleteOrganisation = async (req, res) => {
     }
     const organisationId = uuidSchema.parse(req.params.organisationId);
     const prisma = await getClientByTenantId(req.tenantId);
+    const findOrg = await prisma.organisation.findFirstOrThrow({ where: { organisationId } });
+    const otpValue = generateOTP();
     await prisma.organisation.update({
         where: {
             organisationId,
@@ -384,6 +391,7 @@ export const deleteOrganisation = async (req, res) => {
         },
         data: {
             deletedAt: new Date(),
+            organisationName: `${findOrg.organisationName}_deleted_${otpValue}`,
             projects: {
                 updateMany: {
                     where: { organisationId },

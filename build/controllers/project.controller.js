@@ -1,11 +1,12 @@
 import { getClientByTenantId } from '../config/db.js';
 import { BadRequestError, NotFoundError, SuccessResponse } from '../config/apiError.js';
 import { StatusCodes } from 'http-status-codes';
-import { consumedBudgetSchema, createKanbanSchema, createProjectSchema, projectAssginedRole, projectIdSchema, projectStatusSchema, updateKanbanSchema, updateProjectSchema } from '../schemas/projectSchema.js';
-import { ProjectStatusEnum, TaskStatusEnum, UserRoleEnum } from '@prisma/client';
+import { addUserIntoProject, consumedBudgetSchema, createKanbanSchema, createProjectSchema, projectAssginedRole, projectIdSchema, projectStatusSchema, updateKanbanSchema, updateProjectSchema } from '../schemas/projectSchema.js';
+import { NotificationTypeEnum, ProjectStatusEnum, TaskStatusEnum, UserRoleEnum } from '@prisma/client';
 import { uuidSchema } from '../schemas/commonSchema.js';
 import { selectUserFields } from '../utils/selectedFieldsOfUsers.js';
 import { calculateProjectDuration } from '../utils/calculateProjectDuration.js';
+import { generateOTP } from '../utils/otpHelper.js';
 export const getProjects = async (req, res) => {
     if (!req.organisationId) {
         throw new BadRequestError('organisationId not found!');
@@ -290,27 +291,42 @@ export const createProject = async (req, res) => {
             assignedUsers: {
                 create: {
                     assginedToUserId: req.userId,
-                    projectRole: UserRoleEnum.ADMINISTRATOR
-                }
-            }
-        }
+                    projectRole: UserRoleEnum.ADMINISTRATOR,
+                },
+            },
+            kanbanColumns: {
+                create: {
+                    name: "Backlog",
+                    percentage: null,
+                    createdByUserId: req.userId,
+                },
+            },
+        },
     });
     return new SuccessResponse(StatusCodes.CREATED, project, 'project created successfully').send(res);
 };
 export const deleteProject = async (req, res) => {
     if (!req.organisationId) {
-        throw new BadRequestError('organisationId not found!');
+        throw new BadRequestError("organisationId not found!");
     }
-    ;
     const projectId = projectIdSchema.parse(req.params.projectId);
     const prisma = await getClientByTenantId(req.tenantId);
-    const findProject = await prisma.project.findFirstOrThrow({ where: { projectId: projectId, organisationId: req.organisationId, deletedAt: null, } });
-    if (findProject) {
-        await prisma.project.delete({
-            where: { projectId },
-        });
-        return new SuccessResponse(StatusCodes.OK, null, "project deleted successfully").send(res);
-    }
+    const findProject = await prisma.project.findFirstOrThrow({
+        where: {
+            projectId: projectId,
+            organisationId: req.organisationId,
+            deletedAt: null,
+        },
+    });
+    const otpValue = generateOTP();
+    await prisma.project.update({
+        where: { projectId },
+        data: {
+            deletedAt: new Date(),
+            projectName: `${findProject.projectName}_deleted_${otpValue}`
+        }
+    });
+    return new SuccessResponse(StatusCodes.OK, null, "project deleted successfully").send(res);
 };
 export const updateProject = async (req, res) => {
     if (!req.organisationId) {
@@ -358,19 +374,19 @@ export const updateProject = async (req, res) => {
 export const getKanbanColumnById = async (req, res) => {
     const projectId = uuidSchema.parse(req.params.projectId);
     const prisma = await getClientByTenantId(req.tenantId);
-    const kanbanColumn = await prisma.kanbanColumn.findMany({
-        where: { projectId, deletedAt: null },
-    });
-    if (kanbanColumn.length === 0) {
-        await prisma.kanbanColumn.create({
-            data: {
-                projectId,
-                name: "Backlog",
-                percentage: null,
-                createdByUserId: req.userId,
-            },
-        });
-    }
+    // const kanbanColumn = await prisma.kanbanColumn.findMany({
+    //   where: { projectId, deletedAt: null },
+    // });
+    // if(kanbanColumn.length === 0) {
+    //   await prisma.kanbanColumn.create({
+    //     data: {
+    //       projectId,
+    //       name: "Backlog",
+    //       percentage: null,
+    //       createdByUserId: req.userId!,
+    //     },
+    //   });
+    // }
     const updatedKanban = await prisma.kanbanColumn.findMany({
         where: { projectId, deletedAt: null },
     });
@@ -661,4 +677,61 @@ export const updateProjectRole = async (req, res) => {
         },
     });
     return new SuccessResponse(StatusCodes.OK, updateRole, "Role updated successfully.").send(res);
+};
+export const userAssignIntoProject = async (req, res) => {
+    if (!req.userId) {
+        throw new BadRequestError("userId not found!!");
+    }
+    const prisma = await getClientByTenantId(req.tenantId);
+    const projectId = uuidSchema.parse(req.params.projectId);
+    const projectAssginedToUser = addUserIntoProject.parse(req.body);
+    // const existingAssignments = await prisma.projectAssignUsers.findMany({
+    //   where: {
+    //     projectId,
+    //   },
+    // });
+    // const assignmentsToDelete = existingAssignments.filter(
+    //   (assignment) => !userIds.includes(assignment.assginedToUserId)
+    // );
+    // for (const assignment of assignmentsToDelete) {
+    //   await prisma.projectAssignUsers.delete({
+    //     where: {
+    //       projectAssignUsersId: assignment.projectAssignUsersId,
+    //     },
+    //   });
+    // }
+    for (const { userId, userRoleForProject } of projectAssginedToUser) {
+        const findUser = await prisma.user.findFirst({
+            where: {
+                deletedAt: null,
+                userId
+            }
+        });
+        const findProjectAssginedToUser = await prisma.projectAssignUsers.findFirst({
+            where: {
+                projectId,
+                assginedToUserId: userId
+            }
+        });
+        if (!findProjectAssginedToUser) {
+            const addMemberToProject = await prisma.projectAssignUsers.create({
+                data: {
+                    assginedToUserId: userId,
+                    projectId: projectId,
+                    projectRole: userRoleForProject,
+                },
+                include: {
+                    user: {
+                        select: {
+                            email: true,
+                        },
+                    },
+                },
+            });
+            //Send notification
+            const message = `Project assigned to you`;
+            await prisma.notification.sendNotification(NotificationTypeEnum.PROJECT, message, userId, req.userId, projectId);
+        }
+    }
+    return new SuccessResponse(StatusCodes.OK, null, "Project assgined successfully.").send(res);
 };

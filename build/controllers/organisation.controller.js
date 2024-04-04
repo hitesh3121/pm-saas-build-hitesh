@@ -13,6 +13,7 @@ import { selectUserFields } from "../utils/selectedFieldsOfUsers.js";
 import { HistoryTypeEnumValue } from "../schemas/enums.js";
 import moment from 'moment';
 import { AwsUploadService } from "../services/aws.services.js";
+import { generateOTP } from "../utils/otpHelper.js";
 export const getOrganisationById = async (req, res) => {
     const organisationId = organisationIdSchema.parse(req.params.organisationId);
     const prisma = await getClientByTenantId(req.tenantId);
@@ -271,7 +272,7 @@ export const removeOrganisationMember = async (req, res) => {
         where: {
             deletedAt: null,
             status: {
-                notIn: [TaskStatusEnum.COMPLETED],
+                in: [TaskStatusEnum.NOT_STARTED, TaskStatusEnum.IN_PROGRESS],
             },
             assignedUsers: {
                 some: {
@@ -286,6 +287,7 @@ export const removeOrganisationMember = async (req, res) => {
             status: {
                 in: [ProjectStatusEnum.ACTIVE],
             },
+            deletedAt: null,
             assignedUsers: {
                 some: {
                     assginedToUserId: findUserOrg.userId,
@@ -299,56 +301,30 @@ export const removeOrganisationMember = async (req, res) => {
     if (findAssignedTask.length > 0) {
         throw new BadRequestError("Pending tasks is already exists for this user!");
     }
-    await prisma.$transaction([
-        prisma.userOrganisation.update({
-            where: { userOrganisationId },
-            data: {
-                deletedAt: new Date(),
-                user: {
-                    update: {
-                        provider: {
-                            updateMany: {
-                                where: {
-                                    userId: findUserOrg.userId
-                                },
-                                data: {
-                                    deletedAt: new Date(),
-                                }
+    const otpValue = generateOTP();
+    // await prisma.$transaction([
+    await prisma.userOrganisation.update({
+        where: { userOrganisationId },
+        data: {
+            deletedAt: new Date(),
+            user: {
+                update: {
+                    provider: {
+                        updateMany: {
+                            where: {
+                                userId: findUserOrg.userId
+                            },
+                            data: {
+                                deletedAt: new Date(),
                             }
-                        },
-                        deletedAt: new Date(),
+                        }
                     },
+                    deletedAt: new Date(),
+                    email: `${findUserOrg.user?.email}_deleted_${otpValue}`,
                 },
             },
-        }),
-        prisma.user.update({
-            where: { userId: findUserOrg.userId },
-            data: {
-                deletedAt: new Date(),
-            },
-            include: {
-                comment: true,
-                userOrganisation: true,
-                userResetPassword: true,
-                createdOrganisations: true,
-                updatedOrganisations: true,
-                createdProject: true,
-                updatedProject: true,
-                provider: true,
-                createdTask: true,
-                updatedTask: true,
-                taskAssignUsers: true,
-                createdKanbanColumn: true,
-                updatedKanbanColumn: true,
-                history: true,
-                uploadedAttachment: true,
-                addedDependencies: true,
-                sentNotifications: true,
-                receivedNotifications: true,
-                projectAssignUsers: true
-            },
-        }),
-    ]);
+        },
+    });
     return new SuccessResponse(StatusCodes.OK, null, "Member removed successfully").send(res);
 };
 export const changeMemberRole = async (req, res) => {
@@ -378,8 +354,10 @@ export const reassignTasksAndProjects = async (req, res) => {
             assginedToUserId: oldUserId,
             deletedAt: null,
             task: {
-                status: TaskStatusEnum.IN_PROGRESS
-            }
+                status: {
+                    in: [TaskStatusEnum.IN_PROGRESS, TaskStatusEnum.NOT_STARTED],
+                },
+            },
         },
         include: {
             task: true,
@@ -389,59 +367,37 @@ export const reassignTasksAndProjects = async (req, res) => {
         where: {
             assginedToUserId: oldUserId,
             project: {
-                status: ProjectStatusEnum.ACTIVE
-            }
+                status: {
+                    in: [ProjectStatusEnum.ACTIVE],
+                },
+            },
         },
         include: {
             project: true,
-        }
+        },
     });
-    for (const oldUserOfProject of oldUsersProjects) {
-        const existingAssignment = await prisma.projectAssignUsers.findFirst({
+    for (const oldUsersTask of oldUsersTasks) {
+        const deletedUser = await prisma.taskAssignUsers.delete({
+            where: {
+                taskAssignUsersId: oldUsersTask.taskAssignUsersId,
+                taskId: oldUsersTask.taskId,
+            },
+            include: {
+                user: {
+                    select: {
+                        email: true,
+                    },
+                },
+            },
+        });
+        const userExistInTask = await prisma.taskAssignUsers.findFirst({
             where: {
                 assginedToUserId: newUserId,
-                projectId: oldUserOfProject.project.projectId
+                taskId: oldUsersTask.taskId,
             },
         });
-        await prisma.projectAssignUsers.delete({
-            where: { projectAssignUsersId: oldUserOfProject.projectAssignUsersId },
-        });
-        if (!existingAssignment) {
-            await prisma.projectAssignUsers.create({
-                data: {
-                    assginedToUserId: newUserId,
-                    projectId: oldUserOfProject.project.projectId,
-                    projectRole: oldUserOfProject.projectRole
-                },
-            });
-        }
-    }
-    for (const oldUsersTask of oldUsersTasks) {
-        const existingAssignmentTask = await prisma.taskAssignUsers.findUnique({
-            where: {
-                taskAssignUsersId: newUserId,
-            },
-            include: {
-                user: {
-                    select: {
-                        email: true,
-                    },
-                },
-            },
-        });
-        const deletedUser = await prisma.taskAssignUsers.delete({
-            where: { taskAssignUsersId: oldUsersTask.taskAssignUsersId },
-            include: {
-                user: {
-                    select: {
-                        email: true,
-                    },
-                },
-            },
-        });
-        let newCreatedUser;
-        if (!existingAssignmentTask) {
-            newCreatedUser = await prisma.taskAssignUsers.create({
+        if (!userExistInTask) {
+            const newCreatedUser = await prisma.taskAssignUsers.create({
                 data: {
                     assginedToUserId: newUserId,
                     taskId: oldUsersTask.taskId,
@@ -454,19 +410,42 @@ export const reassignTasksAndProjects = async (req, res) => {
                     },
                 },
             });
+            //Send notification
+            const message = `Task reassigned to you`;
+            await prisma.notification.sendNotification(NotificationTypeEnum.TASK, message, newUserId, userId, oldUsersTask.taskId);
+            // History-Manage
+            const historyMessage = "Task's assignee changed from";
+            const historyData = {
+                oldValue: deletedUser?.user?.email,
+                newValue: newCreatedUser
+                    ? newCreatedUser.user.email
+                    : deletedUser?.user.email,
+            };
+            await prisma.history.createHistory(userId, HistoryTypeEnumValue.TASK, historyMessage, historyData, oldUsersTask.taskId);
         }
-        //Send notification
-        const message = `Task reassigned to you`;
-        await prisma.notification.sendNotification(NotificationTypeEnum.TASK, message, newUserId, userId, oldUsersTask.taskId);
-        // History-Manage
-        const historyMessage = "Task's assignee changed from";
-        const historyData = {
-            oldValue: deletedUser?.user?.email,
-            newValue: newCreatedUser
-                ? newCreatedUser.user.email
-                : existingAssignmentTask?.user.email,
-        };
-        await prisma.history.createHistory(userId, HistoryTypeEnumValue.TASK, historyMessage, historyData, oldUsersTask.taskId);
+    }
+    for (const oldUserOfProject of oldUsersProjects) {
+        const deletedProjectUser = await prisma.projectAssignUsers.delete({
+            where: {
+                projectAssignUsersId: oldUserOfProject.projectAssignUsersId,
+                projectId: oldUserOfProject.projectId,
+            },
+        });
+        const userExists = await prisma.projectAssignUsers.findFirst({
+            where: {
+                assginedToUserId: newUserId,
+                projectId: oldUserOfProject.projectId,
+            },
+        });
+        if (!userExists) {
+            const updatedNewUser = await prisma.projectAssignUsers.create({
+                data: {
+                    assginedToUserId: newUserId,
+                    projectId: oldUserOfProject.projectId,
+                    projectRole: oldUserOfProject.projectRole,
+                },
+            });
+        }
     }
     return new SuccessResponse(StatusCodes.OK, null, "Tasks reassigned successfully.").send(res);
 };

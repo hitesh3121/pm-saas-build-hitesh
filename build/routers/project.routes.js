@@ -9,6 +9,11 @@ router.get("/", roleMiddleware([
     UserRoleEnum.PROJECT_MANAGER,
     UserRoleEnum.TEAM_MEMBER,
 ]), ProjectController.getProjects);
+router.put("/userAssignIntoProject/:projectId", roleMiddleware([
+    UserRoleEnum.ADMINISTRATOR,
+    UserRoleEnum.PROJECT_MANAGER,
+    UserRoleEnum.TEAM_MEMBER,
+]), ProjectController.userAssignIntoProject);
 router.get('/kanban-column/:projectId', ProjectController.getKanbanColumnById);
 router.post('/kanban-column/:projectId', ProjectController.createKanbanColumn);
 router.put('/kanban-column/:kanbanColumnId', ProjectController.updatekanbanColumn);

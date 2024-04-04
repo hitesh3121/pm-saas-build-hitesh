@@ -16,6 +16,7 @@ import { taskFlag } from '../utils/calculationFlag.js';
 import { calculateProjectEndDate } from '../utils/calculateProjectEndDate.js';
 import { calculateDurationAndPercentage, checkTaskStatus } from '../utils/taskRecursion.js';
 import { attachmentAddOrRemove, commentEditorDelete, dependenciesAddOrRemove, taskUpdateOrDelete } from '../middleware/role.middleware.js';
+import { generateOTP } from '../utils/otpHelper.js';
 export const getTasks = async (req, res) => {
     if (!req.organisationId) {
         throw new BadRequestError("organisationId not found!!");
@@ -133,7 +134,7 @@ export const createTask = async (req, res) => {
     if (!req.organisationId) {
         throw new BadRequestError("organisationId not found!!");
     }
-    const { taskName, taskDescription, startDate, duration } = createTaskSchema.parse(req.body);
+    const { taskName, taskDescription, startDate, duration, completionPecentage, kanbanColumnId } = createTaskSchema.parse(req.body);
     const projectId = projectIdSchema.parse(req.params.projectId);
     const prisma = await getClientByTenantId(req.tenantId);
     const parentTaskId = req.params.parentTaskId;
@@ -172,7 +173,8 @@ export const createTask = async (req, res) => {
             parentTaskId: parentTaskId ? parentTaskId : null,
             createdByUserId: req.userId,
             updatedByUserId: req.userId,
-            completionPecentage: 0 // By defualt percentage will be zero : dev_hitesh
+            completionPecentage,
+            kanbanColumnId,
         },
         include: {
             documentAttachments: true,
@@ -299,17 +301,21 @@ export const updateTask = async (req, res) => {
 };
 export const deleteTask = async (req, res) => {
     if (!req.userId) {
-        throw new BadRequestError('userId not found!!');
+        throw new BadRequestError("userId not found!!");
     }
-    ;
     const taskId = uuidSchema.parse(req.params.taskId);
     const prisma = await getClientByTenantId(req.tenantId);
     const { hasAccessIf, findtask } = await taskUpdateOrDelete(taskId, req.role, req.userId, req.tenantId);
     if (!hasAccessIf) {
         throw new UnAuthorizedError("You are not authorized to delete task");
     }
-    await prisma.task.delete({
+    const otpValue = generateOTP();
+    await prisma.task.update({
         where: { taskId },
+        data: {
+            deletedAt: new Date(),
+            taskName: `${findtask.taskName}_deleted_${otpValue}`,
+        },
         include: {
             comments: true,
             documentAttachments: true,
@@ -317,6 +323,19 @@ export const deleteTask = async (req, res) => {
             dependencies: true,
         },
     });
+    if (findtask.subtasks.length > 0) {
+        for (const subTask of findtask.subtasks) {
+            await prisma.task.update({
+                where: {
+                    taskId: subTask.taskId,
+                },
+                data: {
+                    deletedAt: new Date(),
+                    taskName: `${subTask.taskName}_deleted_${otpValue}`,
+                },
+            });
+        }
+    }
     return new SuccessResponse(StatusCodes.OK, null, "task deleted successfully").send(res);
 };
 export const statusChangeTask = async (req, res) => {
@@ -499,14 +518,17 @@ export const deleteAttachment = async (req, res) => {
         throw new UnAuthorizedError("You are not authorized to delete attachment");
     }
     //TODO: If Delete require on S3
-    // await AwsUploadService.deleteFile(attachment.name, 'task-attachment');
-    // const deletedAttachment = await prisma.taskAttachment.delete({ where: { attachmentId } });
-    const deletedAttachment = await prisma.taskAttachment.update({
-        where: { attachmentId },
-        data: {
-            deletedAt: new Date(),
-        },
-    });
+    if (findAttchment) {
+        try {
+            const name = `${findAttchment.uploadedBy}-${findAttchment.name}`;
+            console.log({ name }, 'called');
+            await AwsUploadService.deleteFile(name, 'task-attachment');
+        }
+        catch (error) {
+            console.error("Error while deleting file from s3", error);
+        }
+    }
+    const deletedAttachment = await prisma.taskAttachment.delete({ where: { attachmentId } });
     // History-Manage
     const historyMessage = "Task's attachment was removed";
     const historyData = { oldValue: deletedAttachment.name, newValue: null };
@@ -574,7 +596,7 @@ export const addMemberToTask = async (req, res) => {
     const message = `Task assigned to you`;
     await prisma.notification.sendNotification(NotificationTypeEnum.TASK, message, assginedToUserId, req.userId, taskId);
     // History-Manage
-    const historyMessage = "Task's assignee changed from";
+    const historyMessage = "Task's assignee was added";
     const historyData = { oldValue: null, newValue: member.user?.email };
     await prisma.history.createHistory(req.userId, HistoryTypeEnumValue.TASK, historyMessage, historyData, member.taskId);
     return new SuccessResponse(StatusCodes.CREATED, member, "Member added successfully").send(res);

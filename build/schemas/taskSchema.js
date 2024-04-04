@@ -4,7 +4,9 @@ export const createTaskSchema = z.object({
     taskName: z.string().min(1),
     taskDescription: z.string().optional(),
     startDate: z.coerce.date(),
-    duration: z.number().multipleOf(0.01)
+    duration: z.number().multipleOf(0.01),
+    completionPecentage: z.number().multipleOf(0.01).optional(),
+    kanbanColumnId: z.string().optional(),
 });
 export const updateTaskSchema = z.object({
     taskName: z.string().min(1).optional(),

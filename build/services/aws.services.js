@@ -22,4 +22,25 @@ export class AwsUploadService {
             });
         });
     }
+    // TODO: If Delete require on S3
+    static async deleteFile(fileName, fileType) {
+        AWS.config.update({
+            accessKeyId: settings.awsBucketCredentials.accessKeyId,
+            secretAccessKey: settings.awsBucketCredentials.secretAccessKey,
+        });
+        const bucketName = settings.awsBucketCredentials.bucketName;
+        const params = {
+            Bucket: `${bucketName}/${settings.environment}/${fileType}`,
+            Key: fileName,
+        };
+        const s3 = new AWS.S3();
+        return new Promise((resolve, reject) => {
+            s3.deleteObject(params, (err) => {
+                if (err)
+                    reject(err);
+                resolve();
+            });
+        });
+    }
+    ;
 }
