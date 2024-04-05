@@ -2,8 +2,8 @@ import { z } from "zod";
 import { ZodErrorMessageEnumValue } from "./enums.js";
 export const authSignUpSchema = z
     .object({
-    firstName: z.string().optional(),
-    lastName: z.string().optional(),
+    firstName: z.string({ required_error: ZodErrorMessageEnumValue.REQUIRED }),
+    lastName: z.string({ required_error: ZodErrorMessageEnumValue.REQUIRED }),
     email: z.string({ required_error: ZodErrorMessageEnumValue.REQUIRED }).email({ message: "Email is not valid" }),
     password: z
         .string()

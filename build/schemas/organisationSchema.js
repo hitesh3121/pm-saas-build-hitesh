@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { OrgStatusEnumValue, UserRoleEnumValue, ZodErrorMessageEnumValue, } from "./enums.js";
+import { OrgStatusEnumValue, UserRoleEnumValue, } from "./enums.js";
 export var OrgListOfNonWorkingDaysEnum;
 (function (OrgListOfNonWorkingDaysEnum) {
     OrgListOfNonWorkingDaysEnum["MON"] = "MON";
@@ -18,8 +18,7 @@ export const createOrganisationSchema = z.object({
     country: z.string().min(1),
     nonWorkingDays: z
         .nativeEnum(OrgListOfNonWorkingDaysEnum)
-        .array()
-        .min(1, { message: ZodErrorMessageEnumValue.REQUIRED }),
+        .array().optional(),
 });
 export const updateOrganisationSchema = z.object({
     organisationName: z.string().min(1).optional(),

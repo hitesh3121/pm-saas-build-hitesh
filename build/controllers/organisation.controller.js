@@ -72,7 +72,7 @@ export const createOrganisation = async (req, res) => {
                     role: UserRoleEnum.ADMINISTRATOR,
                 },
             },
-            nonWorkingDays: nonWorkingDays,
+            nonWorkingDays: nonWorkingDays ?? [],
         },
     });
     const findUser = await prisma.user.findFirst({
