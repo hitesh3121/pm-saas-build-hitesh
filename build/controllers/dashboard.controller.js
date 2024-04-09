@@ -18,7 +18,7 @@ export const dashboardAPI = async (req, res) => {
     let projectManagersProjects;
     let role = req.role;
     if (!role) {
-        return new SuccessResponse(StatusCodes.OK, [], 'get all project successfully').send(res);
+        return new SuccessResponse(StatusCodes.OK, [], "get all project successfully").send(res);
     }
     if (role === UserRoleEnum.PROJECT_MANAGER) {
         projectManagersProjects = await prisma.project.findMany({
@@ -221,6 +221,7 @@ export const dashboardAPI = async (req, res) => {
     const projects = await Promise.all(projectManagersProjects.map(async (project) => {
         const CPI = await calculationCPI(project, req.tenantId, organisationId);
         const spi = await calculationSPI(req.tenantId, organisationId, project.projectId);
+        const progressionPercentage = await prisma.project.projectProgression(project.projectId, req.tenantId, organisationId);
         if (project.status === ProjectStatusEnum.ACTIVE) {
             if (spi < 0.8) {
                 data[0]++;
@@ -251,6 +252,7 @@ export const dashboardAPI = async (req, res) => {
             completedTasksCount,
             actualDuration,
             estimatedDuration,
+            progressionPercentage,
         };
     }));
     const spiData = { labels, data };
@@ -258,7 +260,7 @@ export const dashboardAPI = async (req, res) => {
         projects,
         statusChartData,
         overallSituationChartData,
-        spiData
+        spiData,
     };
     return new SuccessResponse(StatusCodes.OK, response, "Portfolio projects of PM").send(res);
 };
@@ -291,7 +293,7 @@ export const administartorProjects = async (req, res) => {
                             },
                         },
                     },
-                }
+                },
             },
         },
     });
@@ -402,7 +404,7 @@ export const administartorProjects = async (req, res) => {
         orgCreatedByUser,
         statusChartData,
         overallSituationChartData,
-        spiData
+        spiData,
     };
     return new SuccessResponse(StatusCodes.OK, response, "Portfolio projects of Administrator").send(res);
 };
@@ -610,10 +612,12 @@ export const projectDashboardByprojectId = async (req, res) => {
     const projectDates = {
         startDate: projectWithTasks.startDate,
         estimatedEndDate: projectWithTasks.estimatedEndDate,
-        actualEndDate: projectWithTasks.tasks.length === 0 ? null : projectWithTasks.actualEndDate,
+        actualEndDate: projectWithTasks.tasks.length === 0
+            ? null
+            : projectWithTasks.actualEndDate,
         projectCreatedAt: projectWithTasks.createdAt,
         actualDuration,
-        estimatedDuration
+        estimatedDuration,
     };
     // Calculate Number of Portfolio Projects per Overall Situation
     const statusCounts = projectWithTasks.tasks.reduce((acc, task) => {
