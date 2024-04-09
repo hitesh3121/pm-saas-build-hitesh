@@ -220,8 +220,8 @@ export const dashboardAPI = async (req, res) => {
     const data = [0, 0, 0];
     const projects = await Promise.all(projectManagersProjects.map(async (project) => {
         const CPI = await calculationCPI(project, req.tenantId, organisationId);
+        const spi = await calculationSPI(req.tenantId, organisationId, project.projectId);
         if (project.status === ProjectStatusEnum.ACTIVE) {
-            const spi = await calculationSPI(req.tenantId, organisationId, project.projectId);
             if (spi < 0.8) {
                 data[0]++;
             }
@@ -247,6 +247,7 @@ export const dashboardAPI = async (req, res) => {
         return {
             ...project,
             CPI,
+            spi,
             completedTasksCount,
             actualDuration,
             estimatedDuration,

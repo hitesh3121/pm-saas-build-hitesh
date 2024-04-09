@@ -11,8 +11,8 @@ export const ProjectStatusEnumValue = {
     ON_HOLD: 'ON_HOLD'
 };
 export const TaskDependenciesEnumValue = {
-    BLOCKING: 'BLOCKING',
-    WAITING_ON: 'WAITING_ON',
+    PREDECESSORS: "PREDECESSORS",
+    SUCCESSORS: "SUCCESSORS"
 };
 export const TaskStatusEnumValue = {
     NOT_STARTED: "NOT_STARTED",

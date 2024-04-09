@@ -162,7 +162,7 @@ export const createOperator = async (req, res) => {
         const bodyMessage = `
       You are invited in console
       
-      URL: ${settings.adminURL}/login
+      URL: ${settings.adminURL}login
       LOGIN: ${newUser.email}
       PASSWORD: ${randomPassword}
       `;

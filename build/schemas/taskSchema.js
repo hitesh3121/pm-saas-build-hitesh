@@ -36,8 +36,8 @@ export const dependenciesTaskSchema = z
 })
     .refine((data) => {
     const { dependentType, dependendentOnTaskId } = data;
-    if ((dependentType === TaskDependenciesEnumValue.BLOCKING ||
-        dependentType === TaskDependenciesEnumValue.WAITING_ON) &&
+    if ((dependentType === TaskDependenciesEnumValue.SUCCESSORS ||
+        dependentType === TaskDependenciesEnumValue.PREDECESSORS) &&
         !dependendentOnTaskId) {
         throw new ZodError([
             {
@@ -49,8 +49,8 @@ export const dependenciesTaskSchema = z
         ]);
     }
     else if (dependendentOnTaskId &&
-        dependentType != TaskDependenciesEnumValue.WAITING_ON &&
-        dependentType != TaskDependenciesEnumValue.BLOCKING) {
+        dependentType != TaskDependenciesEnumValue.PREDECESSORS &&
+        dependentType != TaskDependenciesEnumValue.SUCCESSORS) {
         throw new ZodError([
             {
                 code: "invalid_string",

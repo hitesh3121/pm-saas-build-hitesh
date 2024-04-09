@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { OrgStatusEnumValue, UserRoleEnumValue, } from "./enums.js";
+import { OrgStatusEnumValue, UserRoleEnumValue } from "./enums.js";
 export var OrgListOfNonWorkingDaysEnum;
 (function (OrgListOfNonWorkingDaysEnum) {
     OrgListOfNonWorkingDaysEnum["MON"] = "MON";
@@ -16,9 +16,7 @@ export const createOrganisationSchema = z.object({
     industry: z.string().min(1),
     status: z.nativeEnum(OrgStatusEnumValue),
     country: z.string().min(1),
-    nonWorkingDays: z
-        .nativeEnum(OrgListOfNonWorkingDaysEnum)
-        .array().optional(),
+    nonWorkingDays: z.nativeEnum(OrgListOfNonWorkingDaysEnum).array().optional(),
 });
 export const updateOrganisationSchema = z.object({
     organisationName: z.string().min(1).optional(),
@@ -37,7 +35,7 @@ export const addOrganisationMemberSchema = z.object({
     }, {
         message: "Only team member and project manager role allowed",
     }),
-    projectId: z.string().uuid().optional()
+    projectId: z.string().uuid().optional(),
 });
 export const organisationStatuSchema = z.object({
     status: z.nativeEnum(OrgStatusEnumValue),
@@ -55,16 +53,23 @@ export const reAssginedTaskSchema = z.object({
     oldUserId: z.string().uuid(),
     newUserId: z.string().uuid(),
 });
-export const assignProjectAndRoleToUserSchema = z
-    .object({
-    projectRoleForUser: z.nativeEnum(UserRoleEnumValue),
-    projectId: z.string().uuid(),
-})
-    .array();
+export const assignProjectAndRoleToUserSchema = z.object({
+    isRoleChangePmToTm: z.boolean(),
+    arrayOfRoleAndProjectId: z
+        .object({
+        projectRoleForUser: z.nativeEnum(UserRoleEnumValue),
+        projectId: z.string().uuid(),
+    })
+        .array(),
+});
 export const addMemberToOrgSchema = z.object({
     email: z.string(),
 });
 export const organisationUserBlockUnblockSchema = z.object({
     organisationId: z.string().uuid(),
     userOrganisationId: z.string().uuid(),
+});
+export const roleChangePmToTmSchema = z.object({
+    projectId: z.string().uuid(),
+    newProjectManagerUserId: z.string().uuid(),
 });

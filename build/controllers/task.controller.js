@@ -1,22 +1,22 @@
-import { getClientByTenantId } from '../config/db.js';
-import { BadRequestError, NotFoundError, SuccessResponse, UnAuthorizedError } from '../config/apiError.js';
-import { StatusCodes } from 'http-status-codes';
-import { projectIdSchema } from '../schemas/projectSchema.js';
-import { createCommentTaskSchema, createTaskSchema, attachmentTaskSchema, taskStatusSchema, updateTaskSchema, assginedToUserIdSchema, dependenciesTaskSchema, milestoneTaskSchema } from '../schemas/taskSchema.js';
-import { NotificationTypeEnum, TaskStatusEnum, UserStatusEnum } from '@prisma/client';
-import { AwsUploadService } from '../services/aws.services.js';
-import { uuidSchema } from '../schemas/commonSchema.js';
-import { MilestoneIndicatorStatusEnum } from '@prisma/client';
-import { HistoryTypeEnumValue } from '../schemas/enums.js';
+import { StatusCodes } from "http-status-codes";
+import { NotificationTypeEnum, TaskStatusEnum, UserStatusEnum, } from "@prisma/client";
+import { MilestoneIndicatorStatusEnum } from "@prisma/client";
+import { getClientByTenantId } from "../config/db.js";
+import { BadRequestError, NotFoundError, SuccessResponse, UnAuthorizedError, } from "../config/apiError.js";
+import { projectIdSchema } from "../schemas/projectSchema.js";
+import { createCommentTaskSchema, createTaskSchema, attachmentTaskSchema, taskStatusSchema, updateTaskSchema, assginedToUserIdSchema, dependenciesTaskSchema, milestoneTaskSchema, } from "../schemas/taskSchema.js";
+import { AwsUploadService } from "../services/aws.services.js";
+import { uuidSchema } from "../schemas/commonSchema.js";
+import { HistoryTypeEnumValue } from "../schemas/enums.js";
 import { removeProperties } from "../types/removeProperties.js";
-import { taskEndDate } from '../utils/calcualteTaskEndDate.js';
-import { selectUserFields } from '../utils/selectedFieldsOfUsers.js';
-import { calculationSubTaskProgression } from '../utils/calculationSubTaskProgression.js';
-import { taskFlag } from '../utils/calculationFlag.js';
-import { calculateProjectEndDate } from '../utils/calculateProjectEndDate.js';
-import { calculateDurationAndPercentage, checkTaskStatus } from '../utils/taskRecursion.js';
-import { attachmentAddOrRemove, commentEditorDelete, dependenciesAddOrRemove, taskUpdateOrDelete } from '../middleware/role.middleware.js';
-import { generateOTP } from '../utils/otpHelper.js';
+import { taskEndDate } from "../utils/calcualteTaskEndDate.js";
+import { selectUserFields } from "../utils/selectedFieldsOfUsers.js";
+import { calculationSubTaskProgression } from "../utils/calculationSubTaskProgression.js";
+import { taskFlag } from "../utils/calculationFlag.js";
+import { calculateProjectEndDate } from "../utils/calculateProjectEndDate.js";
+import { calculateDurationAndPercentage, checkTaskStatus, } from "../utils/taskRecursion.js";
+import { generateOTP } from "../utils/otpHelper.js";
+import { attachmentAddOrRemove, commentEditorDelete, dependenciesAddOrRemove, taskUpdateOrDelete, } from "../middleware/role.middleware.js";
 export const getTasks = async (req, res) => {
     if (!req.organisationId) {
         throw new BadRequestError("organisationId not found!!");
@@ -26,15 +26,16 @@ export const getTasks = async (req, res) => {
     const prisma = await getClientByTenantId(req.tenantId);
     const tasks = await prisma.task.findMany({
         where: { projectId: projectId, deletedAt: null },
-        orderBy: { createdAt: 'desc' }, include: {
+        orderBy: { createdAt: "desc" },
+        include: {
             assignedUsers: {
                 where: { deletedAt: null },
                 select: {
                     taskAssignUsersId: true,
                     user: {
                         select: selectUserFields,
-                    }
-                }
+                    },
+                },
             },
             subtasks: {
                 where: { deletedAt: null },
@@ -47,12 +48,12 @@ export const getTasks = async (req, res) => {
                     },
                 },
             },
-            dependencies: true
+            dependencies: true,
         },
     });
     const finalArray = await Promise.all(tasks.map(async (task) => {
         const endDate = await taskEndDate(task, req.tenantId, organisationId);
-        const completionPecentage = await calculationSubTaskProgression(task, req.tenantId, organisationId) ?? 0;
+        const completionPecentage = (await calculationSubTaskProgression(task, req.tenantId, organisationId)) ?? 0;
         const { flag, delay } = await taskFlag(task, req.tenantId, organisationId);
         const updatedTask = {
             ...task,
@@ -63,7 +64,7 @@ export const getTasks = async (req, res) => {
         };
         return updatedTask;
     }));
-    return new SuccessResponse(StatusCodes.OK, finalArray, 'get all task successfully').send(res);
+    return new SuccessResponse(StatusCodes.OK, finalArray, "get all task successfully").send(res);
 };
 export const getTaskById = async (req, res) => {
     if (!req.organisationId) {
@@ -88,11 +89,11 @@ export const getTaskById = async (req, res) => {
                     taskAssignUsersId: true,
                     user: {
                         select: selectUserFields,
-                    }
-                }
+                    },
+                },
             },
             documentAttachments: {
-                where: { deletedAt: null }
+                where: { deletedAt: null },
             },
             subtasks: {
                 where: { deletedAt: null },
@@ -122,7 +123,7 @@ export const getTaskById = async (req, res) => {
         },
     });
     const endDate = await taskEndDate(task, req.tenantId, req.organisationId);
-    const completionPecentage = await calculationSubTaskProgression(task, req.tenantId, req.organisationId) ?? 0;
+    const completionPecentage = (await calculationSubTaskProgression(task, req.tenantId, req.organisationId)) ?? 0;
     const { flag, delay } = await taskFlag(task, req.tenantId, req.organisationId);
     const finalResponse = { ...task, completionPecentage, flag, endDate, delay };
     return new SuccessResponse(StatusCodes.OK, finalResponse, "task selected").send(res);
@@ -134,7 +135,7 @@ export const createTask = async (req, res) => {
     if (!req.organisationId) {
         throw new BadRequestError("organisationId not found!!");
     }
-    const { taskName, taskDescription, startDate, duration, completionPecentage, kanbanColumnId } = createTaskSchema.parse(req.body);
+    const { taskName, taskDescription, startDate, duration, completionPecentage, kanbanColumnId, } = createTaskSchema.parse(req.body);
     const projectId = projectIdSchema.parse(req.params.projectId);
     const prisma = await getClientByTenantId(req.tenantId);
     const parentTaskId = req.params.parentTaskId;
@@ -142,7 +143,7 @@ export const createTask = async (req, res) => {
         where: {
             projectId,
             taskName,
-        }
+        },
     });
     if (findTask) {
         throw new BadRequestError("A task with a similar name already exists!");
@@ -152,17 +153,14 @@ export const createTask = async (req, res) => {
             where: { taskId: parentTaskId, deletedAt: null },
         });
         if (!parentTask) {
-            throw new NotFoundError('Parent task not found');
+            throw new NotFoundError("Parent task not found");
         }
-        ;
         // Handle subtask not more then 3
         const countOfSubTasks = await prisma.task.calculateSubTask(parentTaskId);
         if (countOfSubTasks > 3) {
             throw new BadRequestError("Maximum limit of sub tasks reached");
         }
-        ;
     }
-    ;
     const task = await prisma.task.create({
         data: {
             projectId: projectId,
@@ -179,7 +177,7 @@ export const createTask = async (req, res) => {
         include: {
             documentAttachments: true,
             assignedUsers: true,
-            dependencies: true
+            dependencies: true,
         },
     });
     const fieldEntries = [];
@@ -196,7 +194,9 @@ export const createTask = async (req, res) => {
         });
     }
     for (const [fieldName, fieldSchema] of Object.entries(createTaskSchema.parse(req.body))) {
-        if (fieldName !== "taskName" && fieldName !== "taskDescription") {
+        if (fieldName !== "taskName" &&
+            fieldName !== "taskDescription" &&
+            fieldName !== "kanbanColumnId") {
             const fieldValue = req.body[fieldName];
             if (fieldValue !== undefined &&
                 fieldValue !== null &&
@@ -340,13 +340,11 @@ export const deleteTask = async (req, res) => {
 };
 export const statusChangeTask = async (req, res) => {
     if (!req.userId) {
-        throw new BadRequestError('userId not found!!');
+        throw new BadRequestError("userId not found!!");
     }
-    ;
     if (!req.organisationId) {
-        throw new BadRequestError('organisationId not found!!');
+        throw new BadRequestError("organisationId not found!!");
     }
-    ;
     const taskId = uuidSchema.parse(req.params.taskId);
     const statusBody = taskStatusSchema.parse(req.body);
     const prisma = await getClientByTenantId(req.tenantId);
@@ -358,7 +356,8 @@ export const statusChangeTask = async (req, res) => {
     if (statusBody.status === TaskStatusEnum.COMPLETED) {
         completionPercentage = 100;
     }
-    else if (findtask.milestoneIndicator && statusBody.status === TaskStatusEnum.NOT_STARTED) {
+    else if (findtask.milestoneIndicator &&
+        statusBody.status === TaskStatusEnum.NOT_STARTED) {
         completionPercentage = 0;
     }
     else if (statusBody.status === TaskStatusEnum.IN_PROGRESS) {
@@ -372,7 +371,7 @@ export const statusChangeTask = async (req, res) => {
                 ? MilestoneIndicatorStatusEnum.COMPLETED
                 : MilestoneIndicatorStatusEnum.NOT_STARTED,
             completionPecentage: completionPercentage,
-            updatedByUserId: req.userId
+            updatedByUserId: req.userId,
         },
     });
     // History-Manage
@@ -387,13 +386,12 @@ export const statusChangeTask = async (req, res) => {
 };
 export const statusCompletedAllTAsk = async (req, res) => {
     if (!req.userId) {
-        throw new BadRequestError('userId not found!!');
+        throw new BadRequestError("userId not found!!");
     }
-    ;
     const projectId = projectIdSchema.parse(req.params.projectId);
     const prisma = await getClientByTenantId(req.tenantId);
     const findAllTaskByProjectId = await prisma.task.findMany({
-        where: { projectId: projectId, deletedAt: null }
+        where: { projectId: projectId, deletedAt: null },
     });
     if (findAllTaskByProjectId.length > 0) {
         await prisma.task.updateMany({
@@ -401,8 +399,8 @@ export const statusCompletedAllTAsk = async (req, res) => {
             data: {
                 status: TaskStatusEnum.COMPLETED,
                 completionPecentage: 100,
-                updatedByUserId: req.userId
-            }
+                updatedByUserId: req.userId,
+            },
         });
         // History-Manage
         for (const task of findAllTaskByProjectId) {
@@ -432,8 +430,8 @@ export const addComment = async (req, res) => {
         data: {
             taskId: taskId,
             commentByUserId: req.userId,
-            commentText: commentText
-        }
+            commentText: commentText,
+        },
     });
     return new SuccessResponse(StatusCodes.CREATED, comment, "comment added successfully").send(res);
 };
@@ -485,7 +483,6 @@ export const addAttachment = async (req, res) => {
     else {
         files.push(taskAttachmentFiles);
     }
-    ;
     for (const singleFile of files) {
         const taskAttachmentURL = await AwsUploadService.uploadFileWithContent(`${req.userId}-${singleFile?.name}`, singleFile?.data, "task-attachment");
         await prisma.taskAttachment.create({
@@ -493,7 +490,7 @@ export const addAttachment = async (req, res) => {
                 taskId: taskId,
                 url: taskAttachmentURL,
                 name: singleFile.name,
-                uploadedBy: req.userId
+                uploadedBy: req.userId,
             },
         });
         // History-Manage
@@ -521,14 +518,16 @@ export const deleteAttachment = async (req, res) => {
     if (findAttchment) {
         try {
             const name = `${findAttchment.uploadedBy}-${findAttchment.name}`;
-            console.log({ name }, 'called');
-            await AwsUploadService.deleteFile(name, 'task-attachment');
+            console.log({ name }, "called");
+            await AwsUploadService.deleteFile(name, "task-attachment");
         }
         catch (error) {
             console.error("Error while deleting file from s3", error);
         }
     }
-    const deletedAttachment = await prisma.taskAttachment.delete({ where: { attachmentId } });
+    const deletedAttachment = await prisma.taskAttachment.delete({
+        where: { attachmentId },
+    });
     // History-Manage
     const historyMessage = "Task's attachment was removed";
     const historyData = { oldValue: deletedAttachment.name, newValue: null };
@@ -582,7 +581,7 @@ export const addMemberToTask = async (req, res) => {
     const member = await prisma.taskAssignUsers.create({
         data: {
             assginedToUserId: assginedToUserId,
-            taskId: taskId
+            taskId: taskId,
         },
         include: {
             user: {
@@ -592,7 +591,7 @@ export const addMemberToTask = async (req, res) => {
             },
         },
     });
-    //Send notification 
+    //Send notification
     const message = `Task assigned to you`;
     await prisma.notification.sendNotification(NotificationTypeEnum.TASK, message, assginedToUserId, req.userId, taskId);
     // History-Manage
@@ -614,7 +613,7 @@ export const deleteMemberFromTask = async (req, res) => {
         include: {
             user: {
                 select: {
-                    email: true
+                    email: true,
                 },
             },
         },
@@ -659,19 +658,22 @@ export const addDependencies = async (req, res) => {
             dependentType: dependentType,
             dependentTaskId: taskId,
             dependendentOnTaskId: dependendentOnTaskId,
-            dependenciesAddedBy: req.userId
+            dependenciesAddedBy: req.userId,
         },
         include: {
             dependentOnTask: {
                 select: {
                     taskName: true,
-                }
-            }
-        }
+                },
+            },
+        },
     });
     // History-Manage
     const historyMessage = "Task’s dependency was added";
-    const historyData = { oldValue: null, newValue: addDependencies.dependentOnTask.taskName };
+    const historyData = {
+        oldValue: null,
+        newValue: addDependencies.dependentOnTask.taskName,
+    };
     await prisma.history.createHistory(req.userId, HistoryTypeEnumValue.TASK, historyMessage, historyData, taskId);
     return new SuccessResponse(StatusCodes.OK, addDependencies, "Dependencies added successfully").send(res);
 };
@@ -693,13 +695,16 @@ export const removeDependencies = async (req, res) => {
             dependentOnTask: {
                 select: {
                     taskName: true,
-                }
-            }
-        }
+                },
+            },
+        },
     });
     // History-Manage
     const historyMessage = "Task’s dependency was removed";
-    const historyData = { oldValue: deletedTask.dependentOnTask.taskName, newValue: null };
+    const historyData = {
+        oldValue: deletedTask.dependentOnTask.taskName,
+        newValue: null,
+    };
     await prisma.history.createHistory(req.userId, HistoryTypeEnumValue.TASK, historyMessage, historyData, deletedTask.dependentTaskId);
     return new SuccessResponse(StatusCodes.OK, null, "Dependencies removed successfully").send(res);
 };
@@ -722,20 +727,20 @@ export const addOrRemoveMilesstone = async (req, res) => {
         data: {
             milestoneIndicator: milestoneIndicator,
             duration,
-            completionPecentage: 0 // If milestone then percentage will be 0 : 05-03-2024 - dev_hitesh
+            completionPecentage: 0, // If milestone then percentage will be 0 : 05-03-2024 - dev_hitesh
         },
         where: {
             taskId: taskId,
         },
-        include: { parent: { select: { taskId: true } } }
+        include: { parent: { select: { taskId: true } } },
     });
     // Handle-auto-duration
     if (milestone && milestone.parent?.taskId) {
         const updatedParent = await prisma.task.findFirst({
             where: {
-                taskId: milestone.parent.taskId
+                taskId: milestone.parent.taskId,
             },
-            include: { subtasks: true }
+            include: { subtasks: true },
         });
         const subtaskDurations = updatedParent?.subtasks.map((subtask) => subtask.duration) ?? [];
         const maxSubtaskDuration = Math.max(...subtaskDurations);

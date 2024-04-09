@@ -1,8 +1,8 @@
 import { getClientByTenantId } from "../config/db.js";
 import { BadRequestError, ForbiddenError, NotFoundError, SuccessResponse, } from "../config/apiError.js";
 import { StatusCodes } from "http-status-codes";
-import { createOrganisationSchema, organisationIdSchema, updateOrganisationSchema, addMemberToOrgSchema, memberRoleSchema, reAssginedTaskSchema, assignProjectAndRoleToUserSchema, organisationUserBlockUnblockSchema, } from "../schemas/organisationSchema.js";
-import { NotificationTypeEnum, ProjectStatusEnum, TaskStatusEnum, UserProviderTypeEnum, UserRoleEnum, UserStatusEnum } from "@prisma/client";
+import { createOrganisationSchema, organisationIdSchema, updateOrganisationSchema, addMemberToOrgSchema, memberRoleSchema, reAssginedTaskSchema, assignProjectAndRoleToUserSchema, organisationUserBlockUnblockSchema, roleChangePmToTmSchema, } from "../schemas/organisationSchema.js";
+import { NotificationTypeEnum, ProjectStatusEnum, TaskStatusEnum, UserProviderTypeEnum, UserRoleEnum, UserStatusEnum, } from "@prisma/client";
 import { encrypt } from "../utils/encryption.js";
 import { uuidSchema } from "../schemas/commonSchema.js";
 import { ZodError } from "zod";
@@ -11,7 +11,7 @@ import { settings } from "../config/settings.js";
 import { generateRandomPassword } from "../utils/generateRandomPassword.js";
 import { selectUserFields } from "../utils/selectedFieldsOfUsers.js";
 import { HistoryTypeEnumValue } from "../schemas/enums.js";
-import moment from 'moment';
+import moment from "moment";
 import { AwsUploadService } from "../services/aws.services.js";
 import { generateOTP } from "../utils/otpHelper.js";
 export const getOrganisationById = async (req, res) => {
@@ -37,8 +37,8 @@ export const getOrganisationById = async (req, res) => {
                     },
                 },
                 orderBy: {
-                    createdAt: 'asc',
-                }
+                    createdAt: "asc",
+                },
             },
         },
     });
@@ -86,7 +86,6 @@ export const createOrganisation = async (req, res) => {
             },
         });
     }
-    ;
     return new SuccessResponse(StatusCodes.CREATED, organisation, "Organisation created successfully").send(res);
 };
 export const updateOrganisation = async (req, res) => {
@@ -153,26 +152,26 @@ export const addOrganisationMember = async (req, res) => {
                 provider: {
                     create: {
                         idOrPassword: hashedPassword,
-                        providerType: UserProviderTypeEnum.EMAIL
-                    }
+                        providerType: UserProviderTypeEnum.EMAIL,
+                    },
                 },
                 userOrganisation: {
                     create: {
-                        organisationId: organisationId
-                    }
-                }
+                        organisationId: organisationId,
+                    },
+                },
             },
             include: {
                 userOrganisation: {
                     include: {
                         organisation: {
                             include: {
-                                createdByUser: true
-                            }
-                        }
-                    }
-                }
-            }
+                                createdByUser: true,
+                            },
+                        },
+                    },
+                },
+            },
         });
         try {
             const newUserOrg = newUser.userOrganisation.find((org) => org.organisationId === organisationId);
@@ -266,7 +265,7 @@ export const removeOrganisationMember = async (req, res) => {
     const userOrganisationId = uuidSchema.parse(req.params.userOrganisationId);
     const findUserOrg = await prisma.userOrganisation.findFirstOrThrow({
         where: { userOrganisationId },
-        include: { user: true, },
+        include: { user: true },
     });
     const findAssignedTask = await prisma.task.findMany({
         where: {
@@ -312,12 +311,12 @@ export const removeOrganisationMember = async (req, res) => {
                     provider: {
                         updateMany: {
                             where: {
-                                userId: findUserOrg.userId
+                                userId: findUserOrg.userId,
                             },
                             data: {
                                 deletedAt: new Date(),
-                            }
-                        }
+                            },
+                        },
                     },
                     deletedAt: new Date(),
                     email: `${findUserOrg.user?.email}_deleted_${otpValue}`,
@@ -460,8 +459,8 @@ export const uploadHolidayCSV = async (req, res) => {
         throw new BadRequestError("No CSV file uploaded!");
     }
     const fileName = file.name;
-    const fileExtension = fileName.split('.').pop();
-    if (fileExtension !== 'csv') {
+    const fileExtension = fileName.split(".").pop();
+    if (fileExtension !== "csv") {
         throw new BadRequestError("Please upload a CSV file.");
     }
     const csvString = file.data.toString("utf-8");
@@ -491,7 +490,7 @@ export const uploadHolidayCSV = async (req, res) => {
             holidayCsvUrl: true,
         },
     });
-    const avatarImgURL = await AwsUploadService.uploadFileWithContent(`${findUploadedCSV.organisationName}-${fileName}`, file.data, 'organisation-csv');
+    const avatarImgURL = await AwsUploadService.uploadFileWithContent(`${findUploadedCSV.organisationName}-${fileName}`, file.data, "organisation-csv");
     await prisma.$transaction(async (prisma) => {
         await Promise.all([
             prisma.organisationHolidays.deleteMany({
@@ -500,9 +499,9 @@ export const uploadHolidayCSV = async (req, res) => {
             prisma.organisation.update({
                 where: { organisationId },
                 data: {
-                    holidayCsvUrl: avatarImgURL
-                }
-            })
+                    holidayCsvUrl: avatarImgURL,
+                },
+            }),
         ]);
         const holidayRecords = csvRows.map(async (value) => {
             if (value?.Date) {
@@ -539,8 +538,8 @@ export const resendInvitationToMember = async (req, res) => {
         include: {
             organisation: {
                 include: {
-                    createdByUser: true
-                }
+                    createdByUser: true,
+                },
             },
             user: {
                 select: {
@@ -617,7 +616,7 @@ export const assignProjectAndRoleToUser = async (req, res) => {
     }
     const userOrganisationId = uuidSchema.parse(req.params.userOrganisationId);
     const prisma = await getClientByTenantId(req.tenantId);
-    const bodyValue = assignProjectAndRoleToUserSchema.parse(req.body);
+    const { arrayOfRoleAndProjectId, isRoleChangePmToTm } = assignProjectAndRoleToUserSchema.parse(req.body);
     const findUserOrg = await prisma.userOrganisation.findFirstOrThrow({
         where: {
             userOrganisationId,
@@ -632,33 +631,95 @@ export const assignProjectAndRoleToUser = async (req, res) => {
         where: {
             assginedToUserId: findUserOrg.userId,
         },
+        select: {
+            projectAssignUsersId: true,
+            projectId: true,
+            projectRole: true,
+        },
     });
-    const bodyProjectIds = bodyValue.map(item => item.projectId);
-    const assignmentsToDelete = existingAssignments.filter(assignment => !bodyProjectIds.includes(assignment.projectId));
-    for (const assignment of assignmentsToDelete) {
-        await prisma.projectAssignUsers.delete({
+    const bodyProjectIds = arrayOfRoleAndProjectId.map((item) => item.projectId);
+    const assignmentsToDelete = existingAssignments.filter((assignment) => !bodyProjectIds.includes(assignment.projectId));
+    // Get IDs of assignments to delete
+    const assignmentsIdsToDelete = assignmentsToDelete.map((assignment) => assignment.projectAssignUsersId);
+    // Batch delete assignments
+    await prisma.$transaction(assignmentsIdsToDelete.map((userId) => prisma.projectAssignUsers.delete({
+        where: {
+            projectAssignUsersId: userId,
+        },
+    })));
+    for (const item of arrayOfRoleAndProjectId) {
+        const findPM = await prisma.projectAssignUsers.findFirst({
             where: {
-                projectAssignUsersId: assignment.projectAssignUsersId,
+                projectRole: UserRoleEnum.PROJECT_MANAGER,
+                projectId: item.projectId,
             },
         });
-    }
-    for (const item of bodyValue) {
+        if (findPM &&
+            item.projectRoleForUser === UserRoleEnum.PROJECT_MANAGER &&
+            !isRoleChangePmToTm) {
+            throw new BadRequestError("Project Manager already exists!!");
+        }
+        else if (findPM &&
+            item.projectRoleForUser === UserRoleEnum.PROJECT_MANAGER &&
+            isRoleChangePmToTm) {
+            try {
+                await prisma.projectAssignUsers.update({
+                    where: {
+                        projectId: item.projectId,
+                        projectAssignUsersId: findPM.projectAssignUsersId,
+                    },
+                    data: {
+                        projectRole: UserRoleEnum.TEAM_MEMBER,
+                    },
+                });
+                const checkPMExistsOrNot = await prisma.projectAssignUsers.findFirst({
+                    where: {
+                        assginedToUserId: findUserOrg.userId,
+                        projectId: item.projectId,
+                        projectRole: UserRoleEnum.PROJECT_MANAGER,
+                    },
+                });
+                if (!checkPMExistsOrNot) {
+                    await prisma.projectAssignUsers.create({
+                        data: {
+                            projectRole: UserRoleEnum.PROJECT_MANAGER,
+                            assginedToUserId: findUserOrg.userId,
+                            projectId: item.projectId,
+                        },
+                    });
+                }
+                else {
+                    await prisma.projectAssignUsers.update({
+                        where: {
+                            projectAssignUsersId: checkPMExistsOrNot.projectAssignUsersId,
+                            projectId: item.projectId,
+                        },
+                        data: {
+                            projectRole: UserRoleEnum.PROJECT_MANAGER,
+                        },
+                    });
+                }
+            }
+            catch (error) {
+                console.error(error);
+            }
+        }
         const checkUserExistsOrNot = await prisma.projectAssignUsers.findFirst({
             where: {
                 assginedToUserId: findUserOrg.userId,
                 projectId: item.projectId,
-            }
+            },
         });
         if (checkUserExistsOrNot) {
             const updateUserDetails = await prisma.projectAssignUsers.update({
                 where: {
-                    projectAssignUsersId: checkUserExistsOrNot.projectAssignUsersId
+                    projectAssignUsersId: checkUserExistsOrNot.projectAssignUsersId,
                 },
                 data: {
                     projectId: item.projectId,
                     projectRole: item.projectRoleForUser,
-                    assginedToUserId: findUserOrg.userId
-                }
+                    assginedToUserId: findUserOrg.userId,
+                },
             });
         }
         else {
@@ -712,4 +773,33 @@ export const organisationUserBlockUnblock = async (req, res) => {
         where: { userId: findUserOrg.userId },
     });
     return new SuccessResponse(StatusCodes.OK, null, "Status updated successfully.").send(res);
+};
+export const changePmToTm = async (req, res) => {
+    if (!req.userId) {
+        throw new BadRequestError("Please provide userId!!");
+    }
+    const { projectId, newProjectManagerUserId } = roleChangePmToTmSchema.parse(req.body);
+    const prisma = await getClientByTenantId(req.tenantId);
+    const findPm = await prisma.projectAssignUsers.findFirst({
+        where: { projectId, projectRole: UserRoleEnum.PROJECT_MANAGER },
+    });
+    await prisma.$transaction([
+        prisma.projectAssignUsers.update({
+            where: {
+                projectId,
+                projectAssignUsersId: findPm?.projectAssignUsersId,
+            },
+            data: {
+                projectRole: UserRoleEnum.TEAM_MEMBER,
+            },
+        }),
+        prisma.projectAssignUsers.create({
+            data: {
+                projectRole: UserRoleEnum.PROJECT_MANAGER,
+                assginedToUserId: newProjectManagerUserId,
+                projectId,
+            },
+        }),
+    ]);
+    return new SuccessResponse(StatusCodes.OK, null, "Role updated successfully.").send(res);
 };
