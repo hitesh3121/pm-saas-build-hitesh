@@ -318,6 +318,16 @@ export const removeOrganisationMember = async (req, res) => {
                             },
                         },
                     },
+                    projectAssignUsers: {
+                        deleteMany: {
+                            assginedToUserId: findUserOrg.userId,
+                        },
+                    },
+                    taskAssignUsers: {
+                        deleteMany: {
+                            assginedToUserId: findUserOrg.userId,
+                        },
+                    },
                     deletedAt: new Date(),
                     email: `${findUserOrg.user?.email}_deleted_${otpValue}`,
                 },

@@ -330,6 +330,11 @@ export const deleteProject = async (req, res) => {
         data: {
             deletedAt: new Date(),
             projectName: `${findProject.projectName}_deleted_${otpValue}`,
+            assignedUsers: {
+                deleteMany: {
+                    projectId,
+                },
+            },
         },
     });
     return new SuccessResponse(StatusCodes.OK, null, "project deleted successfully").send(res);
@@ -519,6 +524,7 @@ export const deleteAssignedUserFromProject = async (req, res) => {
             },
         },
     });
+    console.log(findAssignedTask, findUser.projectRole, "findAssignedTask---->");
     if (findAssignedTask.length > 0) {
         throw new BadRequestError("Pending tasks is already exists for this user!");
     }

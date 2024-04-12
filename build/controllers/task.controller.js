@@ -316,6 +316,11 @@ export const deleteTask = async (req, res) => {
         data: {
             deletedAt: new Date(),
             taskName: `${findtask.taskName}_deleted_${otpValue}`,
+            assignedUsers: {
+                deleteMany: {
+                    taskId,
+                },
+            },
         },
         include: {
             comments: true,
