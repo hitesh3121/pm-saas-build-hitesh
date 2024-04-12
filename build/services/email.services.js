@@ -1,11 +1,11 @@
-import AWS from 'aws-sdk';
-import { settings } from '../config/settings.js';
+import AWS from "aws-sdk";
+import { settings } from "../config/settings.js";
 export class EmailService {
     static async sendEmail(toEmail, subjectMessage, bodyMessage) {
         AWS.config.update({
             region: settings.emailCredentials.region,
             accessKeyId: settings.emailCredentials.accessKeyId,
-            secretAccessKey: settings.emailCredentials.secretAccessKey
+            secretAccessKey: settings.emailCredentials.secretAccessKey,
         });
         const ses = new AWS.SES();
         const params = {
@@ -33,6 +33,4 @@ export class EmailService {
             throw error;
         }
     }
-    ;
 }
-;

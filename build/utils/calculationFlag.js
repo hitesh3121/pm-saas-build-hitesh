@@ -12,7 +12,7 @@ export async function calculationTPI(task, tenantId, organisationId) {
         return {
             tpiValue: 1,
             tpiFlag: "Green",
-            plannedProgression: 100
+            plannedProgression: 100,
         };
     }
     const endDate = await taskEndDate(task, tenantId, organisationId);
@@ -35,7 +35,7 @@ export async function calculationTPI(task, tenantId, organisationId) {
     return {
         tpiValue: tpi,
         tpiFlag: flag,
-        plannedProgression: plannedProgress
+        plannedProgression: plannedProgress,
     };
 }
 export async function taskFlag(task, tenantId, organisationId) {

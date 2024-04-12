@@ -1,5 +1,5 @@
-import express from 'express';
-import * as UserController from '../controllers/user.controller.js';
+import express from "express";
+import * as UserController from "../controllers/user.controller.js";
 let router = express.Router();
 router.get("/me", UserController.me);
 router.put("/", UserController.updateUserProfile);

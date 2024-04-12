@@ -1,8 +1,8 @@
 import passport from "passport";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
+import { UserProviderTypeEnum, UserStatusEnum } from "@prisma/client";
 import { settings } from "../config/settings.js";
 import { getClientByTenantId } from "../config/db.js";
-import { UserProviderTypeEnum, UserStatusEnum } from "@prisma/client";
 const loginWithGoogle = new GoogleStrategy({
     clientID: settings.googleCredentials.clientId,
     clientSecret: settings.googleCredentials.clientSecret,
@@ -20,18 +20,22 @@ const loginWithGoogle = new GoogleStrategy({
                     userId: user.userId,
                     providerType: UserProviderTypeEnum.GOOGLE,
                     deletedAt: null,
-                }
+                },
             });
             if (findGoogleProvider) {
-                return done(null, { ...user, googleToken: token, provider: UserProviderTypeEnum.GOOGLE });
+                return done(null, {
+                    ...user,
+                    googleToken: token,
+                    provider: UserProviderTypeEnum.GOOGLE,
+                });
             }
             else {
                 const newUser = await prisma.userProvider.create({
                     data: {
                         idOrPassword: profile.id,
                         providerType: UserProviderTypeEnum.GOOGLE,
-                        userId: user.userId
-                    }
+                        userId: user.userId,
+                    },
                 });
                 return done(null, {
                     ...newUser,
@@ -63,12 +67,10 @@ const loginWithGoogle = new GoogleStrategy({
                 provider: UserProviderTypeEnum.GOOGLE,
             });
         }
-        ;
     }
     catch (error) {
         return done(error);
     }
-    ;
 });
 passport.serializeUser(function (user, done) {
     return done(null, user);

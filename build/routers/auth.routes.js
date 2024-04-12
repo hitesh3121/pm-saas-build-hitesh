@@ -9,7 +9,7 @@ router.put("/reset-password/:token", AuthController.resetPassword);
 router.post("/forgot-password", AuthController.forgotPassword);
 router.post("/sign-up", AuthController.signUp);
 router.post("/login", AuthController.login);
-router.post('/logout', AuthController.logout);
+router.post("/logout", AuthController.logout);
 router.get("/access-token", AuthController.getAccessToken);
 router.post("/root-auth", AuthController.verifyRoot);
 router.get("/google", passport.authenticate("google", { scope: ["profile", "email"] }));
@@ -27,13 +27,13 @@ router.get("/google/callback", passport.authenticate("google", {
     const token = createJwtToken(tokenPayload);
     res.cookie(settings.jwt.tokenCookieKey, token, {
         ...cookieConfig,
-        maxAge: cookieConfig.maxAgeToken
+        maxAge: cookieConfig.maxAgeToken,
     });
     // Refresh-Token
     const refreshToken = createJwtToken(tokenPayload, true);
     res.cookie(settings.jwt.refreshTokenCookieKey, refreshToken, {
         ...cookieConfig,
-        maxAge: cookieConfig.maxAgeRefreshToken
+        maxAge: cookieConfig.maxAgeRefreshToken,
     });
     res.redirect(`${settings.appURL}`);
 });

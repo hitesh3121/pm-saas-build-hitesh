@@ -1,15 +1,15 @@
-import { getClientByTenantId } from "../config/db.js";
-import { BadRequestError, InternalServerError, NotFoundError, SuccessResponse, UnAuthorizedError } from "../config/apiError.js";
 import { StatusCodes } from "http-status-codes";
+import { OrgStatusEnum, UserStatusEnum, UserProviderTypeEnum, UserRoleEnum, } from "@prisma/client";
+import { getClientByTenantId } from "../config/db.js";
+import { BadRequestError, InternalServerError, NotFoundError, SuccessResponse, UnAuthorizedError, } from "../config/apiError.js";
 import { userUpdateSchema, userOrgSettingsUpdateSchema, avatarImgSchema, changePasswordSchema, } from "../schemas/userSchema.js";
 import { uuidSchema } from "../schemas/commonSchema.js";
 import { verifyEmailOtpSchema } from "../schemas/authSchema.js";
 import { EmailService } from "../services/email.services.js";
 import { OtpService } from "../services/userOtp.services.js";
-import { generateOTP } from "../utils/otpHelper.js";
 import { AwsUploadService } from "../services/aws.services.js";
+import { generateOTP } from "../utils/otpHelper.js";
 import { compareEncryption, encrypt } from "../utils/encryption.js";
-import { OrgStatusEnum, UserStatusEnum, UserProviderTypeEnum, UserRoleEnum } from "@prisma/client";
 export const me = async (req, res) => {
     const prisma = await getClientByTenantId(req.tenantId);
     const user = await prisma.user.findUniqueOrThrow({
@@ -20,7 +20,7 @@ export const me = async (req, res) => {
                 include: {
                     organisation: {
                         where: { deletedAt: null },
-                        include: { orgHolidays: true, }
+                        include: { orgHolidays: true },
                     },
                 },
             },
@@ -29,7 +29,8 @@ export const me = async (req, res) => {
     });
     let errorMessage = "Your account is blocked, please contact your administrator";
     if (user.userOrganisation[0]?.role === UserRoleEnum.ADMINISTRATOR) {
-        errorMessage = "Your account is blocked, please contact our support at support@projectchef.io";
+        errorMessage =
+            "Your account is blocked, please contact our support at support@projectchef.io";
     }
     if (user?.status === UserStatusEnum.INACTIVE) {
         throw new BadRequestError(errorMessage);
@@ -61,7 +62,7 @@ export const updateUserAvtarImg = async (req, res) => {
     });
     if (!findUser)
         throw new NotFoundError("User not found");
-    const avatarImgURL = await AwsUploadService.uploadFileWithContent(`${findUser.userId}-${files?.avatarImg?.name}`, files?.avatarImg?.data, 'user-profiles');
+    const avatarImgURL = await AwsUploadService.uploadFileWithContent(`${findUser.userId}-${files?.avatarImg?.name}`, files?.avatarImg?.data, "user-profiles");
     const user = await prisma.user.update({
         data: {
             avatarImg: avatarImgURL,
@@ -88,32 +89,29 @@ export const otpVerify = async (req, res) => {
     if (!checkOtp) {
         throw new BadRequestError("Invalid OTP");
     }
-    ;
-    return new SuccessResponse(StatusCodes.OK, null, 'OTP verified successfully').send(res);
+    return new SuccessResponse(StatusCodes.OK, null, "OTP verified successfully").send(res);
 };
 export const resendOTP = async (req, res) => {
     const prisma = await getClientByTenantId(req.tenantId);
     const user = await prisma.user.findFirst({
         where: {
-            userId: req.userId
-        }
+            userId: req.userId,
+        },
     });
     if (!user) {
-        throw new NotFoundError('User not found');
+        throw new NotFoundError("User not found");
     }
-    ;
     const findOtp = await prisma.userOTP.findFirst({
         where: {
             userId: req.userId,
             createdAt: {
-                gt: new Date(Date.now() - 60 * 1000)
-            }
-        }
+                gt: new Date(Date.now() - 60 * 1000),
+            },
+        },
     });
     if (findOtp) {
-        throw new BadRequestError('Please try again after 1 minute');
+        throw new BadRequestError("Please try again after 1 minute");
     }
-    ;
     const otpValue = generateOTP();
     const subjectMessage = `Login OTP`;
     const expiresInMinutes = 10;
@@ -125,8 +123,7 @@ export const resendOTP = async (req, res) => {
     catch (error) {
         throw new InternalServerError();
     }
-    ;
-    return new SuccessResponse(StatusCodes.OK, null, 'Resend OTP successfully').send(res);
+    return new SuccessResponse(StatusCodes.OK, null, "Resend OTP successfully").send(res);
 };
 export const changePassword = async (req, res) => {
     const { oldPassword, password } = changePasswordSchema.parse(req.body);
@@ -143,7 +140,7 @@ export const changePassword = async (req, res) => {
             userId: req.userId,
             deletedAt: null,
             providerType: UserProviderTypeEnum.EMAIL,
-        }
+        },
     });
     if (!findEmailProvider) {
         throw new UnAuthorizedError();
@@ -158,8 +155,8 @@ export const changePassword = async (req, res) => {
             userProviderId: findEmailProvider.userProviderId,
         },
         data: {
-            idOrPassword: hashedPassword
-        }
+            idOrPassword: hashedPassword,
+        },
     });
     return new SuccessResponse(StatusCodes.OK, null, "Change password successfully").send(res);
 };

@@ -8,7 +8,7 @@ export class OtpService {
                 otp: userOtp,
                 isUsed: false,
                 expiryTime: new Date(new Date().getTime() + expiresSecond * 1000),
-            }
+            },
         });
     }
     static async verifyOTP(userOtp, userId, tanentId) {
@@ -18,9 +18,9 @@ export class OtpService {
                 userId: userId,
                 otp: userOtp,
                 expiryTime: {
-                    gt: new Date()
-                }
-            }
+                    gt: new Date(),
+                },
+            },
         });
         if (!findOtp)
             return false;
@@ -45,7 +45,6 @@ export class OtpService {
         ]);
         return true;
     }
-    ;
     static async verifyOTPForConsole(userOtp, userId, tanentId) {
         const prisma = await getClientByTenantId(tanentId);
         const findOtp = await prisma.userOTP.findFirst({
@@ -81,4 +80,3 @@ export class OtpService {
         return true;
     }
 }
-;

@@ -1,8 +1,8 @@
+import { StatusCodes } from "http-status-codes";
+import { ConsoleRoleEnum, ConsoleStatusEnum, UserRoleEnum, UserStatusEnum, } from "@prisma/client";
 import { getClientByTenantId } from "../config/db.js";
 import { compareEncryption, encrypt } from "../utils/encryption.js";
-import { ConsoleRoleEnum, ConsoleStatusEnum, UserRoleEnum, UserStatusEnum, } from "@prisma/client";
 import { BadRequestError, InternalServerError, NotFoundError, SuccessResponse, UnAuthorizedError, } from "../config/apiError.js";
-import { StatusCodes } from "http-status-codes";
 import { avatarImgConsoleSchema, blockAndReassignAdministatorSchema, changeAdministatorSchema, changeOrganisationMemberRoleSchema, consoleLoginSchema, consolePasswordSchema, operatorSchema, operatorStatusSchema, operatorUpdateSchema, } from "../schemas/consoleSchema.js";
 import { createJwtToken } from "../utils/jwtHelper.js";
 import { settings } from "../config/settings.js";
@@ -37,7 +37,7 @@ export const loginConsole = async (req, res) => {
     const { email, password } = consoleLoginSchema.parse(req.body);
     const prisma = await getClientByTenantId(req.tenantId);
     const user = await prisma.consoleUser.findUnique({
-        where: { email, deletedAt: null, },
+        where: { email, deletedAt: null },
     });
     let errorMessage = "Your account is blocked, please contact your super admin";
     if (user?.status === ConsoleStatusEnum.INACTIVE) {
@@ -53,11 +53,11 @@ export const loginConsole = async (req, res) => {
         const refreshToken = createJwtToken(tokenPayload, true);
         res.cookie(settings.jwt.tokenCookieKey, token, {
             ...cookieConfig,
-            maxAge: cookieConfig.maxAgeToken
+            maxAge: cookieConfig.maxAgeToken,
         });
         res.cookie(settings.jwt.refreshTokenCookieKey, refreshToken, {
             ...cookieConfig,
-            maxAge: cookieConfig.maxAgeRefreshToken
+            maxAge: cookieConfig.maxAgeRefreshToken,
         });
         const { password, ...infoWithoutPassword } = user;
         if (!user.isVerified) {
@@ -70,10 +70,9 @@ export const loginConsole = async (req, res) => {
                 await EmailService.sendEmail(user.email, subjectMessage, bodyMessage);
             }
             catch (error) {
-                console.error('Failed to send otp email', error);
+                console.error("Failed to send otp email", error);
             }
         }
-        ;
         return new SuccessResponse(StatusCodes.OK, { user: infoWithoutPassword }, "Login successfully").send(res);
     }
     throw new UnAuthorizedError("There is an error with your login/password");
@@ -334,7 +333,7 @@ export const getAllOrganisation = async (req, res) => {
                 where: { deletedAt: null },
                 include: {
                     user: {
-                        select: selectUserFields
+                        select: selectUserFields,
                     },
                 },
             },
@@ -352,9 +351,9 @@ export const organisationsUser = async (req, res) => {
         where: { organisationId, deletedAt: null },
         include: {
             user: {
-                select: selectUserFields
+                select: selectUserFields,
             },
-            organisation: true
+            organisation: true,
         },
     });
     userOfOrg = userOfOrg.filter((value) => !(value.role === UserRoleEnum.ADMINISTRATOR &&
@@ -367,7 +366,9 @@ export const deleteOrganisation = async (req, res) => {
     }
     const organisationId = uuidSchema.parse(req.params.organisationId);
     const prisma = await getClientByTenantId(req.tenantId);
-    const findOrg = await prisma.organisation.findFirstOrThrow({ where: { organisationId } });
+    const findOrg = await prisma.organisation.findFirstOrThrow({
+        where: { organisationId },
+    });
     const otpValue = generateOTP();
     await prisma.organisation.update({
         where: {
@@ -384,10 +385,10 @@ export const deleteOrganisation = async (req, res) => {
                             dependencies: true,
                             documentAttachments: true,
                             histories: true,
-                        }
-                    }
-                }
-            }
+                        },
+                    },
+                },
+            },
         },
         data: {
             deletedAt: new Date(),
@@ -396,19 +397,19 @@ export const deleteOrganisation = async (req, res) => {
                 updateMany: {
                     where: { organisationId },
                     data: {
-                        deletedAt: new Date()
-                    }
-                }
+                        deletedAt: new Date(),
+                    },
+                },
             },
             userOrganisation: {
                 updateMany: {
                     where: { organisationId },
                     data: {
                         deletedAt: new Date(),
-                    }
-                }
-            }
-        }
+                    },
+                },
+            },
+        },
     });
     return new SuccessResponse(StatusCodes.OK, null, "Organisation deleted successfully").send(res);
 };
@@ -416,7 +417,7 @@ export const updateConsoleUserAvtarImg = async (req, res) => {
     const files = avatarImgConsoleSchema.parse(req.files);
     const prisma = await getClientByTenantId(req.tenantId);
     const findUser = await prisma.consoleUser.findFirst({
-        where: { userId: req.userId, deletedAt: null, },
+        where: { userId: req.userId, deletedAt: null },
     });
     if (!findUser)
         throw new NotFoundError("User not found");
@@ -480,8 +481,7 @@ export const otpVerifyConsole = async (req, res) => {
     if (!checkOtp) {
         throw new BadRequestError("Invalid OTP");
     }
-    ;
-    return new SuccessResponse(StatusCodes.OK, null, 'OTP verified successfully').send(res);
+    return new SuccessResponse(StatusCodes.OK, null, "OTP verified successfully").send(res);
 };
 export const resendOTP = async (req, res) => {
     const prisma = await getClientByTenantId(req.tenantId);
@@ -489,24 +489,22 @@ export const resendOTP = async (req, res) => {
         where: {
             userId: req.userId,
             deletedAt: null,
-        }
+        },
     });
     if (!user) {
-        throw new NotFoundError('User not found');
+        throw new NotFoundError("User not found");
     }
-    ;
     const findOtp = await prisma.userOTP.findFirst({
         where: {
             userId: req.userId,
             createdAt: {
-                gt: new Date(Date.now() - 60 * 1000)
-            }
-        }
+                gt: new Date(Date.now() - 60 * 1000),
+            },
+        },
     });
     if (findOtp) {
-        throw new BadRequestError('Please try again after 1 minute');
+        throw new BadRequestError("Please try again after 1 minute");
     }
-    ;
     const otpValue = generateOTP();
     const subjectMessage = `Login OTP`;
     const expiresInMinutes = 10;
@@ -518,8 +516,7 @@ export const resendOTP = async (req, res) => {
     catch (error) {
         throw new InternalServerError();
     }
-    ;
-    return new SuccessResponse(StatusCodes.OK, null, 'Resend OTP successfully').send(res);
+    return new SuccessResponse(StatusCodes.OK, null, "Resend OTP successfully").send(res);
 };
 export const changeOrgAdministator = async (req, res) => {
     if (!req.userId) {

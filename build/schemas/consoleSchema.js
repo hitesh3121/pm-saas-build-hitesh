@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { OperatorStatusEnumValue, UserRoleEnumValue, ZodErrorMessageEnumValue } from "./enums.js";
+import { OperatorStatusEnumValue, UserRoleEnumValue, ZodErrorMessageEnumValue, } from "./enums.js";
 export const consoleLoginSchema = z.object({
     email: z
         .string({ required_error: ZodErrorMessageEnumValue.REQUIRED })
@@ -22,7 +22,7 @@ export const operatorSchema = z.object({
 export const operatorUpdateSchema = z.object({
     firstName: z.string().min(1, "First name is a required field"),
     lastName: z.string().min(1, "Last name is a required field"),
-    country: z.string().min(1, "Country is a required field")
+    country: z.string().min(1, "Country is a required field"),
 });
 export const operatorStatusSchema = z.object({
     status: z.nativeEnum(OperatorStatusEnumValue),
@@ -48,7 +48,9 @@ export const consolePasswordSchema = z
 });
 export const avatarImgConsoleSchema = z
     .any()
-    .refine((files) => files?.avatarImg?.size <= 1024 * 1024 * 1, { message: "Max file size is 1MB." })
+    .refine((files) => files?.avatarImg?.size <= 1024 * 1024 * 1, {
+    message: "Max file size is 1MB.",
+})
     .refine((files) => ["image/jpeg", "image/jpg", "image/png", "image/webp"].includes(files?.avatarImg?.mimetype), ".jpg, .jpeg, .png and .webp files are accepted.");
 export const changeOrganisationMemberRoleSchema = z.object({
     userOrganisationId: z.string().uuid(),
@@ -57,7 +59,7 @@ export const changeOrganisationMemberRoleSchema = z.object({
 export const blockAndReassignAdministatorSchema = z.object({
     organisationId: z.string().uuid(),
     userOrganisationBlockId: z.string().uuid(),
-    reassginAdministratorId: z.string().uuid()
+    reassginAdministratorId: z.string().uuid(),
 });
 export const changeAdministatorSchema = z.object({
     organisationId: z.string().uuid(),

@@ -1,7 +1,7 @@
 import express from "express";
+import { UserRoleEnum } from "@prisma/client";
 import * as ProjectController from "../controllers/project.controller.js";
 import { roleMiddleware } from "../middleware/role.middleware.js";
-import { UserRoleEnum } from "@prisma/client";
 let router = express.Router();
 router.put("/duplicate-project/:projectId", roleMiddleware([UserRoleEnum.ADMINISTRATOR, UserRoleEnum.PROJECT_MANAGER]), ProjectController.duplicateProjectAndAllItsTask);
 router.get("/", roleMiddleware([
@@ -14,10 +14,10 @@ router.put("/userAssignIntoProject/:projectId", roleMiddleware([
     UserRoleEnum.PROJECT_MANAGER,
     UserRoleEnum.TEAM_MEMBER,
 ]), ProjectController.userAssignIntoProject);
-router.get('/kanban-column/:projectId', ProjectController.getKanbanColumnById);
-router.post('/kanban-column/:projectId', ProjectController.createKanbanColumn);
-router.put('/kanban-column/:kanbanColumnId', ProjectController.updatekanbanColumn);
-router.delete('/kanban-column/:kanbanColumnId', ProjectController.deleteKanbanColumn);
+router.get("/kanban-column/:projectId", ProjectController.getKanbanColumnById);
+router.post("/kanban-column/:projectId", ProjectController.createKanbanColumn);
+router.put("/kanban-column/:kanbanColumnId", ProjectController.updatekanbanColumn);
+router.delete("/kanban-column/:kanbanColumnId", ProjectController.deleteKanbanColumn);
 router.get("/:projectId", roleMiddleware([
     UserRoleEnum.ADMINISTRATOR,
     UserRoleEnum.PROJECT_MANAGER,

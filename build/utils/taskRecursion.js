@@ -109,7 +109,7 @@ export const timeline = async (taskId, tenantId, organisationId) => {
     const task = await prisma.task.findFirstOrThrow({
         where: { taskId, deletedAt: null },
         include: {
-            subtasks: true
+            subtasks: true,
         },
         orderBy: { startDate: "asc" },
     });

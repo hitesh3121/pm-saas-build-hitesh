@@ -1,12 +1,11 @@
-import { verifyJwtToken } from '../utils/jwtHelper.js';
-import { InternalServerError, UnAuthorizedError } from '../config/apiError.js';
-import { settings } from '../config/settings.js';
+import { verifyJwtToken } from "../utils/jwtHelper.js";
+import { InternalServerError, UnAuthorizedError } from "../config/apiError.js";
+import { settings } from "../config/settings.js";
 export const authMiddleware = async (req, res, next) => {
     const token = req.cookies[settings.jwt.tokenCookieKey];
     if (!token) {
         throw new UnAuthorizedError();
     }
-    ;
     try {
         const decoded = verifyJwtToken(token);
         req.userId = decoded.userId;
@@ -15,10 +14,10 @@ export const authMiddleware = async (req, res, next) => {
     }
     catch (error) {
         console.error(error);
-        if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+        if (error.name === "JsonWebTokenError" ||
+            error.name === "TokenExpiredError") {
             throw new UnAuthorizedError();
         }
-        ;
-        throw new InternalServerError('Internal server error');
+        throw new InternalServerError("Internal server error");
     }
 };

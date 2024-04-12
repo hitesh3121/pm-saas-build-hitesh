@@ -1,22 +1,21 @@
-import { getClientByTenantId } from '../config/db.js';
-import { BadRequestError, NotFoundError, SuccessResponse } from '../config/apiError.js';
-import { StatusCodes } from 'http-status-codes';
-import { addUserIntoProject, consumedBudgetSchema, createKanbanSchema, createProjectSchema, projectAssginedRole, projectIdSchema, projectStatusSchema, updateKanbanSchema, updateProjectSchema } from '../schemas/projectSchema.js';
-import { NotificationTypeEnum, ProjectStatusEnum, TaskStatusEnum, UserRoleEnum } from '@prisma/client';
-import { uuidSchema } from '../schemas/commonSchema.js';
-import { selectUserFields } from '../utils/selectedFieldsOfUsers.js';
-import { calculateProjectDuration } from '../utils/calculateProjectDuration.js';
-import { generateOTP } from '../utils/otpHelper.js';
+import { StatusCodes } from "http-status-codes";
+import { NotificationTypeEnum, ProjectStatusEnum, TaskStatusEnum, UserRoleEnum, } from "@prisma/client";
+import { getClientByTenantId } from "../config/db.js";
+import { BadRequestError, NotFoundError, SuccessResponse, } from "../config/apiError.js";
+import { addUserIntoProject, consumedBudgetSchema, createKanbanSchema, createProjectSchema, projectAssginedRole, projectIdSchema, projectStatusSchema, updateKanbanSchema, updateProjectSchema, } from "../schemas/projectSchema.js";
+import { uuidSchema } from "../schemas/commonSchema.js";
+import { selectUserFields } from "../utils/selectedFieldsOfUsers.js";
+import { calculateProjectDuration } from "../utils/calculateProjectDuration.js";
+import { generateOTP } from "../utils/otpHelper.js";
 export const getProjects = async (req, res) => {
     if (!req.organisationId) {
-        throw new BadRequestError('organisationId not found!');
+        throw new BadRequestError("organisationId not found!");
     }
-    ;
     const prisma = await getClientByTenantId(req.tenantId);
     let projects;
     let role = req.role;
     if (!role) {
-        return new SuccessResponse(StatusCodes.OK, [], 'get all project successfully').send(res);
+        return new SuccessResponse(StatusCodes.OK, [], "get all project successfully").send(res);
     }
     if (role === UserRoleEnum.PROJECT_MANAGER) {
         projects = await prisma.project.findMany({
@@ -199,33 +198,36 @@ export const getProjects = async (req, res) => {
             progressionPercentage,
             actualDuration,
             estimatedDuration,
-            actualEndDate
+            actualEndDate,
         };
         projectsWithProgression.push(projectWithProgression);
     }
-    return new SuccessResponse(StatusCodes.OK, projectsWithProgression, 'get all project successfully').send(res);
+    return new SuccessResponse(StatusCodes.OK, projectsWithProgression, "get all project successfully").send(res);
 };
 export const getProjectById = async (req, res) => {
     if (!req.organisationId) {
-        throw new BadRequestError('organisationId not found!');
+        throw new BadRequestError("organisationId not found!");
     }
-    ;
     const projectId = projectIdSchema.parse(req.params.projectId);
     const prisma = await getClientByTenantId(req.tenantId);
     const projects = await prisma.project.findFirstOrThrow({
-        where: { organisationId: req.organisationId, projectId: projectId, deletedAt: null, },
+        where: {
+            organisationId: req.organisationId,
+            projectId: projectId,
+            deletedAt: null,
+        },
         include: {
             tasks: {
                 where: { deletedAt: null },
             },
             createdByUser: {
-                select: selectUserFields
+                select: selectUserFields,
             },
             assignedUsers: {
                 where: {
                     user: {
                         deletedAt: null,
-                    }
+                    },
                 },
                 include: {
                     user: {
@@ -234,7 +236,7 @@ export const getProjectById = async (req, res) => {
                                 where: { deletedAt: null },
                                 select: {
                                     role: true,
-                                    jobTitle: true
+                                    jobTitle: true,
                                 },
                             },
                         },
@@ -251,25 +253,29 @@ export const getProjectById = async (req, res) => {
         ? await calculateProjectDuration(projects.startDate, projects.estimatedEndDate, req.tenantId, req.organisationId)
         : null;
     const actualEndDate = projects.tasks.length === 0 ? null : projects.actualEndDate;
-    const response = { ...projects, progressionPercentage, actualDuration, estimatedDuration, actualEndDate };
+    const response = {
+        ...projects,
+        progressionPercentage,
+        actualDuration,
+        estimatedDuration,
+        actualEndDate,
+    };
     return new SuccessResponse(StatusCodes.OK, response, "project selected").send(res);
 };
 export const createProject = async (req, res) => {
     if (!req.organisationId) {
-        throw new BadRequestError('organisationId not found!');
+        throw new BadRequestError("organisationId not found!");
     }
-    ;
     if (!req.userId) {
-        throw new BadRequestError('userId not found!');
+        throw new BadRequestError("userId not found!");
     }
-    ;
-    const { projectName, projectDescription, startDate, estimatedEndDate, estimatedBudget, defaultView, currency } = createProjectSchema.parse(req.body);
+    const { projectName, projectDescription, startDate, estimatedEndDate, estimatedBudget, defaultView, currency, } = createProjectSchema.parse(req.body);
     const prisma = await getClientByTenantId(req.tenantId);
     const findProject = await prisma.project.findFirst({
         where: {
             organisationId: req.organisationId,
             projectName,
-        }
+        },
     });
     if (findProject) {
         throw new BadRequestError("A project with a similar name already exists!");
@@ -303,7 +309,7 @@ export const createProject = async (req, res) => {
             },
         },
     });
-    return new SuccessResponse(StatusCodes.CREATED, project, 'project created successfully').send(res);
+    return new SuccessResponse(StatusCodes.CREATED, project, "project created successfully").send(res);
 };
 export const deleteProject = async (req, res) => {
     if (!req.organisationId) {
@@ -323,20 +329,18 @@ export const deleteProject = async (req, res) => {
         where: { projectId },
         data: {
             deletedAt: new Date(),
-            projectName: `${findProject.projectName}_deleted_${otpValue}`
-        }
+            projectName: `${findProject.projectName}_deleted_${otpValue}`,
+        },
     });
     return new SuccessResponse(StatusCodes.OK, null, "project deleted successfully").send(res);
 };
 export const updateProject = async (req, res) => {
     if (!req.organisationId) {
-        throw new BadRequestError('organisationId not found!');
+        throw new BadRequestError("organisationId not found!");
     }
-    ;
     if (!req.userId) {
-        throw new BadRequestError('userId not found!');
+        throw new BadRequestError("userId not found!");
     }
-    ;
     const projectUpdateValue = updateProjectSchema.parse(req.body);
     const projectId = projectIdSchema.parse(req.params.projectId);
     const prisma = await getClientByTenantId(req.tenantId);
@@ -345,11 +349,13 @@ export const updateProject = async (req, res) => {
             projectId: projectId,
             organisationId: req.organisationId,
             deletedAt: null,
-        }
+        },
     });
     if (!findProject)
-        throw new NotFoundError('Project not found');
-    if (projectUpdateValue && projectUpdateValue.status && projectUpdateValue.status === ProjectStatusEnum.CLOSED) {
+        throw new NotFoundError("Project not found");
+    if (projectUpdateValue &&
+        projectUpdateValue.status &&
+        projectUpdateValue.status === ProjectStatusEnum.CLOSED) {
         const findTaskWithIncompleteTask = await prisma.task.count({
             where: {
                 projectId: projectId,
@@ -369,24 +375,11 @@ export const updateProject = async (req, res) => {
         where: { projectId: projectId },
         data: { ...updateObj },
     });
-    return new SuccessResponse(StatusCodes.OK, projectUpdate, 'project updated successfully').send(res);
+    return new SuccessResponse(StatusCodes.OK, projectUpdate, "project updated successfully").send(res);
 };
 export const getKanbanColumnById = async (req, res) => {
     const projectId = uuidSchema.parse(req.params.projectId);
     const prisma = await getClientByTenantId(req.tenantId);
-    // const kanbanColumn = await prisma.kanbanColumn.findMany({
-    //   where: { projectId, deletedAt: null },
-    // });
-    // if(kanbanColumn.length === 0) {
-    //   await prisma.kanbanColumn.create({
-    //     data: {
-    //       projectId,
-    //       name: "Backlog",
-    //       percentage: null,
-    //       createdByUserId: req.userId!,
-    //     },
-    //   });
-    // }
     const updatedKanban = await prisma.kanbanColumn.findMany({
         where: { projectId, deletedAt: null },
     });
@@ -394,27 +387,28 @@ export const getKanbanColumnById = async (req, res) => {
 };
 export const statusChangeProject = async (req, res) => {
     if (!req.organisationId) {
-        throw new BadRequestError('organisationId not found!');
+        throw new BadRequestError("organisationId not found!");
     }
-    ;
     if (!req.userId) {
-        throw new BadRequestError('userId not found!');
+        throw new BadRequestError("userId not found!");
     }
-    ;
     const { status } = projectStatusSchema.parse(req.body);
     const projectId = projectIdSchema.parse(req.params.projectId);
     const prisma = await getClientByTenantId(req.tenantId);
-    const findProject = await prisma.project.findFirstOrThrow({ where: { projectId: projectId, organisationId: req.organisationId, deletedAt: null, } });
+    const findProject = await prisma.project.findFirstOrThrow({
+        where: {
+            projectId: projectId,
+            organisationId: req.organisationId,
+            deletedAt: null,
+        },
+    });
     if (findProject) {
         const findTaskWithIncompleteTask = await prisma.task.findMany({
             where: {
                 projectId: projectId,
                 deletedAt: null,
                 status: {
-                    in: [
-                        TaskStatusEnum.NOT_STARTED,
-                        TaskStatusEnum.IN_PROGRESS,
-                    ],
+                    in: [TaskStatusEnum.NOT_STARTED, TaskStatusEnum.IN_PROGRESS],
                 },
             },
         });
@@ -456,7 +450,7 @@ export const updatekanbanColumn = async (req, res) => {
     const findKanbanColumn = await prisma.kanbanColumn.findFirstOrThrow({
         where: {
             kanbanColumnId,
-            deletedAt: null
+            deletedAt: null,
         },
     });
     let updateObj = { ...kanbanColumnUpdateValue, updatedByUserId: req.userId };
@@ -495,10 +489,10 @@ export const addConsumedBudgetToProject = async (req, res) => {
     const projectUpdate = await prisma.project.update({
         where: { projectId: projectId },
         data: {
-            consumedBudget
+            consumedBudget,
         },
     });
-    return new SuccessResponse(StatusCodes.OK, projectUpdate, 'consumed budget updated successfully').send(res);
+    return new SuccessResponse(StatusCodes.OK, projectUpdate, "consumed budget updated successfully").send(res);
 };
 export const deleteAssignedUserFromProject = async (req, res) => {
     if (!req.userId) {
@@ -604,7 +598,7 @@ export const duplicateProjectAndAllItsTask = async (req, res) => {
                                 taskId: taskOneInsert.taskId,
                                 url: doc.url,
                                 name: doc.name,
-                                uploadedBy: doc.uploadedBy
+                                uploadedBy: doc.uploadedBy,
                             },
                         });
                     }
@@ -621,14 +615,15 @@ export const duplicateProjectAndAllItsTask = async (req, res) => {
                                 completionPecentage: 0,
                             },
                         });
-                        if (secondSubTaskInsert && secondsubtask.documentAttachments.length > 0) {
+                        if (secondSubTaskInsert &&
+                            secondsubtask.documentAttachments.length > 0) {
                             for (const doc of documentAttachments) {
                                 await prisma.taskAttachment.create({
                                     data: {
                                         taskId: secondSubTaskInsert.taskId,
                                         url: doc.url,
                                         name: doc.name,
-                                        uploadedBy: doc.uploadedBy
+                                        uploadedBy: doc.uploadedBy,
                                     },
                                 });
                             }
@@ -645,14 +640,15 @@ export const duplicateProjectAndAllItsTask = async (req, res) => {
                                         completionPecentage: 0,
                                     },
                                 });
-                                if (thirdSubTaskInsert && secondsubtask.documentAttachments.length > 0) {
+                                if (thirdSubTaskInsert &&
+                                    secondsubtask.documentAttachments.length > 0) {
                                     for (const doc of documentAttachments) {
                                         await prisma.taskAttachment.create({
                                             data: {
                                                 taskId: thirdSubTaskInsert.taskId,
                                                 url: doc.url,
                                                 name: doc.name,
-                                                uploadedBy: doc.uploadedBy
+                                                uploadedBy: doc.uploadedBy,
                                             },
                                         });
                                     }
@@ -685,33 +681,18 @@ export const userAssignIntoProject = async (req, res) => {
     const prisma = await getClientByTenantId(req.tenantId);
     const projectId = uuidSchema.parse(req.params.projectId);
     const projectAssginedToUser = addUserIntoProject.parse(req.body);
-    // const existingAssignments = await prisma.projectAssignUsers.findMany({
-    //   where: {
-    //     projectId,
-    //   },
-    // });
-    // const assignmentsToDelete = existingAssignments.filter(
-    //   (assignment) => !userIds.includes(assignment.assginedToUserId)
-    // );
-    // for (const assignment of assignmentsToDelete) {
-    //   await prisma.projectAssignUsers.delete({
-    //     where: {
-    //       projectAssignUsersId: assignment.projectAssignUsersId,
-    //     },
-    //   });
-    // }
     for (const { userId, userRoleForProject } of projectAssginedToUser) {
         const findUser = await prisma.user.findFirst({
             where: {
                 deletedAt: null,
-                userId
-            }
+                userId,
+            },
         });
         const findProjectAssginedToUser = await prisma.projectAssignUsers.findFirst({
             where: {
                 projectId,
-                assginedToUserId: userId
-            }
+                assginedToUserId: userId,
+            },
         });
         if (!findProjectAssginedToUser) {
             const addMemberToProject = await prisma.projectAssignUsers.create({

@@ -3,10 +3,8 @@ export function generateOTP() {
     const max = 999999;
     let randomNumber = Math.floor(Math.random() * (max - min + 1)) + min;
     // handle not start with zero
-    while (randomNumber.toString().startsWith('0')) {
+    while (randomNumber.toString().startsWith("0")) {
         randomNumber = Math.floor(Math.random() * (max - min + 1)) + min;
     }
-    ;
     return randomNumber.toString();
 }
-;

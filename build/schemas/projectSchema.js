@@ -1,23 +1,32 @@
 import { z } from "zod";
-import { OverAllTrackEnumValue, ScheduleAndBudgetTrend, ProjectDefaultViewEnumValue, ProjectStatusEnumValue, ZodErrorMessageEnumValue, UserRoleEnumValue } from "./enums.js";
-export const createProjectSchema = z.object({
-    projectName: z.string({ required_error: ZodErrorMessageEnumValue.REQUIRED }),
+import { OverAllTrackEnumValue, ScheduleAndBudgetTrend, ProjectDefaultViewEnumValue, ProjectStatusEnumValue, ZodErrorMessageEnumValue, UserRoleEnumValue, } from "./enums.js";
+export const createProjectSchema = z
+    .object({
+    projectName: z.string({
+        required_error: ZodErrorMessageEnumValue.REQUIRED,
+    }),
     projectDescription: z.string().optional(),
-    startDate: z.coerce.date({ required_error: ZodErrorMessageEnumValue.REQUIRED }),
+    startDate: z.coerce.date({
+        required_error: ZodErrorMessageEnumValue.REQUIRED,
+    }),
     estimatedEndDate: z.coerce.date().optional(),
     estimatedBudget: z.string().optional(),
-    defaultView: z.nativeEnum(ProjectDefaultViewEnumValue, { required_error: ZodErrorMessageEnumValue.REQUIRED }),
+    defaultView: z.nativeEnum(ProjectDefaultViewEnumValue, {
+        required_error: ZodErrorMessageEnumValue.REQUIRED,
+    }),
     currency: z.string({ required_error: ZodErrorMessageEnumValue.REQUIRED }),
-}).refine(data => {
+})
+    .refine((data) => {
     if (data.estimatedEndDate) {
         return new Date(data.estimatedEndDate) >= new Date(data.startDate);
     }
     return true;
 }, {
-    message: 'End date precedes start date.',
-    path: ['estimatedEndDate']
+    message: "End date precedes start date.",
+    path: ["estimatedEndDate"],
 });
-export const updateProjectSchema = z.object({
+export const updateProjectSchema = z
+    .object({
     projectName: z.string().min(1).optional(),
     projectDescription: z.string().optional(),
     startDate: z.coerce.date().optional(),
@@ -33,52 +42,66 @@ export const updateProjectSchema = z.object({
     status: z.nativeEnum(ProjectStatusEnumValue).optional(),
     scheduleTrend: z.nativeEnum(ScheduleAndBudgetTrend).optional(),
     budgetTrend: z.nativeEnum(ScheduleAndBudgetTrend).optional(),
-    consumedBudget: z.string().min(1).optional()
-}).refine(data => {
+    consumedBudget: z.string().min(1).optional(),
+})
+    .refine((data) => {
     if (data.estimatedEndDate) {
         return (new Date(data?.estimatedEndDate ?? new Date()) >=
             new Date(data.startDate ?? new Date()));
     }
     return true;
 }, {
-    message: 'End date precedes start date.',
-    path: ['estimatedEndDate']
+    message: "End date precedes start date.",
+    path: ["estimatedEndDate"],
 });
 export const projectIdSchema = z.string().uuid();
 export const projectStatusSchema = z.object({
     status: z.nativeEnum(ProjectStatusEnumValue),
 });
-export const createKanbanSchema = z.object({
+export const createKanbanSchema = z
+    .object({
     name: z.string({ required_error: ZodErrorMessageEnumValue.REQUIRED }),
-    percentage: z.number().nullish()
-}).refine((data) => {
-    if (data.percentage !== undefined && data.percentage && data.percentage > 100) {
-        return [{ field: "percentage", message: "Percentage should not exceed 100" }];
+    percentage: z.number().nullish(),
+})
+    .refine((data) => {
+    if (data.percentage !== undefined &&
+        data.percentage &&
+        data.percentage > 100) {
+        return [
+            { field: "percentage", message: "Percentage should not exceed 100" },
+        ];
     }
     return true;
 });
-export const updateKanbanSchema = z.object({
+export const updateKanbanSchema = z
+    .object({
     name: z.string({ required_error: ZodErrorMessageEnumValue.REQUIRED }),
-    percentage: z.number().nullish()
-}).refine((data) => {
-    if (data.percentage !== undefined && data.percentage && data.percentage > 100) {
-        return [{ field: "percentage", message: "Percentage should not exceed 100" }];
+    percentage: z.number().nullish(),
+})
+    .refine((data) => {
+    if (data.percentage !== undefined &&
+        data.percentage &&
+        data.percentage > 100) {
+        return [
+            { field: "percentage", message: "Percentage should not exceed 100" },
+        ];
     }
     return true;
 });
-;
 export const consumedBudgetSchema = z.object({
     consumedBudget: z.string({
         required_error: ZodErrorMessageEnumValue.REQUIRED,
     }),
 });
 export const projectAssginedRole = z.object({
-    role: z.nativeEnum(UserRoleEnumValue)
+    role: z.nativeEnum(UserRoleEnumValue),
 });
 export const assginedUserProjectSchema = z.object({
     assginedToUserId: z.string().uuid(),
 });
-export const addUserIntoProject = z.object({
+export const addUserIntoProject = z
+    .object({
     userRoleForProject: z.nativeEnum(UserRoleEnumValue),
     userId: z.string(),
-}).array();
+})
+    .array();

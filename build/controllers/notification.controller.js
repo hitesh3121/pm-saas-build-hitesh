@@ -1,6 +1,6 @@
+import { StatusCodes } from "http-status-codes";
 import { getClientByTenantId } from "../config/db.js";
 import { BadRequestError, SuccessResponse } from "../config/apiError.js";
-import { StatusCodes } from "http-status-codes";
 import { uuidSchema } from "../schemas/commonSchema.js";
 const userSelectFields = {
     avatarImg: true,
@@ -54,11 +54,13 @@ export const readAllNotification = async (req, res) => {
         where: {
             sentTo: req.userId,
             isRead: false,
-        }
+        },
     });
     await prisma.notification.updateMany({
         where: {
-            notificationId: { in: unreadNotifications.map(notification => notification.notificationId) },
+            notificationId: {
+                in: unreadNotifications.map((notification) => notification.notificationId),
+            },
         },
         data: {
             isRead: true,

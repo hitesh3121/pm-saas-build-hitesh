@@ -27,8 +27,6 @@ import { CronService } from "./services/cron.services.js";
 const app = express();
 const server = http.createServer(app);
 RegisterSocketServices.register(server); // Socket
-// compression
-// app.use(compression());
 // File-upload
 app.use(fileUpload());
 // Morgan

@@ -1,7 +1,7 @@
 import express from "express";
+import { UserRoleEnum } from "@prisma/client";
 import * as OrganisationControlller from "../controllers/organisation.controller.js";
 import { roleMiddleware } from "../middleware/role.middleware.js";
-import { UserRoleEnum } from "@prisma/client";
 let router = express.Router();
 router.get("/:organisationId", OrganisationControlller.getOrganisationById);
 router.put("/organisationUserBlockUnblock", OrganisationControlller.organisationUserBlockUnblock);

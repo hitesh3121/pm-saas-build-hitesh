@@ -1,4 +1,4 @@
-import { PrismaClient, UserStatusEnum, UserRoleEnum } from "@prisma/client";
+import { PrismaClient, UserStatusEnum, UserRoleEnum, } from "@prisma/client";
 import { RegisterSocketServices } from "../services/socket.services.js";
 import { calculationSubTaskProgression } from "../utils/calculationSubTaskProgression.js";
 const rootPrismaClient = generatePrismaClient();
@@ -84,16 +84,17 @@ function generatePrismaClient(datasourceUrl) {
                                     },
                                 },
                             },
-                        }
+                        },
                     });
                     let completionPecentageOrDuration = 0;
                     let averagesSumOfDuration = 0;
                     for (const value of parentTasks) {
-                        const completionPecentage = await calculationSubTaskProgression(value, tenantId, organisationId) ?? 0;
-                        completionPecentageOrDuration += Number(completionPecentage) * (value.duration);
+                        const completionPecentage = (await calculationSubTaskProgression(value, tenantId, organisationId)) ?? 0;
+                        completionPecentageOrDuration +=
+                            Number(completionPecentage) * value.duration;
                         averagesSumOfDuration += value.duration * 100;
                     }
-                    const finalValue = (completionPecentageOrDuration / averagesSumOfDuration);
+                    const finalValue = completionPecentageOrDuration / averagesSumOfDuration;
                     return finalValue;
                 },
             },
@@ -121,7 +122,8 @@ function generatePrismaClient(datasourceUrl) {
                     const isTaskAuthor = task.createdByUserId === userId;
                     const isAssignedToTask = task.assignedUsers.some((assignedUser) => assignedUser.user.userId === userId);
                     const canPerformAction = userRoles.some((role) => allowedRoles.includes(role)) ||
-                        isTaskAuthor || isAssignedToTask;
+                        isTaskAuthor ||
+                        isAssignedToTask;
                     return canPerformAction;
                 },
                 async getTaskById(taskId) {
@@ -256,7 +258,7 @@ function generatePrismaClient(datasourceUrl) {
                         },
                     });
                     return roles.map((role) => role.projectRole);
-                }
+                },
             },
         },
     });

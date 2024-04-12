@@ -1,6 +1,5 @@
 import { StatusCodes } from "http-status-codes";
-import { NotificationTypeEnum, TaskStatusEnum, UserStatusEnum, } from "@prisma/client";
-import { MilestoneIndicatorStatusEnum } from "@prisma/client";
+import { NotificationTypeEnum, TaskStatusEnum, UserStatusEnum, MilestoneIndicatorStatusEnum, } from "@prisma/client";
 import { getClientByTenantId } from "../config/db.js";
 import { BadRequestError, NotFoundError, SuccessResponse, UnAuthorizedError, } from "../config/apiError.js";
 import { projectIdSchema } from "../schemas/projectSchema.js";
@@ -17,6 +16,7 @@ import { calculateProjectEndDate } from "../utils/calculateProjectEndDate.js";
 import { calculateDurationAndPercentage, checkTaskStatus, } from "../utils/taskRecursion.js";
 import { generateOTP } from "../utils/otpHelper.js";
 import { attachmentAddOrRemove, commentEditorDelete, dependenciesAddOrRemove, taskUpdateOrDelete, } from "../middleware/role.middleware.js";
+import { enumToString } from "../utils/enumToString.js";
 export const getTasks = async (req, res) => {
     if (!req.organisationId) {
         throw new BadRequestError("organisationId not found!!");
@@ -193,22 +193,19 @@ export const createTask = async (req, res) => {
             value: { oldValue: null, newValue: taskName },
         });
     }
-    for (const [fieldName, fieldSchema] of Object.entries(createTaskSchema.parse(req.body))) {
-        if (fieldName !== "taskName" &&
-            fieldName !== "taskDescription" &&
-            fieldName !== "kanbanColumnId") {
-            const fieldValue = req.body[fieldName];
-            if (fieldValue !== undefined &&
-                fieldValue !== null &&
-                !(fieldName === "duration" && fieldValue === 0) &&
-                !(fieldName === "duration" && fieldValue === 1)) {
-                const message = parentTaskId
-                    ? `Subtask's ${fieldName} was added`
-                    : `Task's ${fieldName} was added`;
-                fieldEntries.push({
-                    message: message,
-                    value: { oldValue: null, newValue: fieldValue },
-                });
+    const excludedFields = ["taskName", "taskDescription", "kanbanColumnId"];
+    for (const [fieldName, fieldValue] of Object.entries(createTaskSchema.parse(req.body))) {
+        if (!excludedFields.includes(fieldName)) {
+            if (fieldValue !== undefined && fieldValue !== null) {
+                if (!(fieldName === "duration" && (fieldValue === 0 || fieldValue === 1))) {
+                    const message = parentTaskId
+                        ? `Subtask's ${fieldName} was added`
+                        : `Task's ${fieldName} was added`;
+                    fieldEntries.push({
+                        message: message,
+                        value: { oldValue: null, newValue: fieldValue },
+                    });
+                }
             }
         }
     }
@@ -270,18 +267,22 @@ export const updateTask = async (req, res) => {
         "assignedUsers",
         "dependencies",
         "milestoneIndicator",
+        "kanbanColumnId",
     ]);
     const findTaskWithoutOtherTable = removeProperties(findtask, [
         "documentAttachments",
         "assignedUsers",
         "dependencies",
         "milestoneIndicator",
+        "kanbanColumnId",
     ]);
     for (const key in taskUpdateValue) {
         if (updatedValueWithoutOtherTable[key] !== findTaskWithoutOtherTable[key]) {
             const historyMessage = `Task's ${key} was changed`;
             const historyData = {
-                oldValue: findTaskWithoutOtherTable[key],
+                oldValue: key === "completionPecentage" && !findTaskWithoutOtherTable[key]
+                    ? 0
+                    : findTaskWithoutOtherTable[key],
                 newValue: updatedValueWithoutOtherTable[key],
             };
             if (key === "startDate" &&
@@ -377,8 +378,8 @@ export const statusChangeTask = async (req, res) => {
     // History-Manage
     const historyMessage = "Task’s status was changed";
     const historyData = {
-        oldValue: findtask.status,
-        newValue: statusBody.status,
+        oldValue: enumToString(findtask.status),
+        newValue: enumToString(statusBody.status),
     };
     await prisma.history.createHistory(req.userId, HistoryTypeEnumValue.TASK, historyMessage, historyData, taskId);
     const statusHandle = await checkTaskStatus(taskId, req.tenantId, req.organisationId);
@@ -406,8 +407,8 @@ export const statusCompletedAllTAsk = async (req, res) => {
         for (const task of findAllTaskByProjectId) {
             const historyMessage = "Task’s status was changed";
             const historyNewValue = {
-                oldValue: task.status,
-                newValue: TaskStatusEnum.COMPLETED,
+                oldValue: enumToString(task.status),
+                newValue: enumToString(TaskStatusEnum.COMPLETED),
             };
             await prisma.history.createHistory(req.userId, HistoryTypeEnumValue.TASK, historyMessage, historyNewValue, task.taskId);
         }
@@ -422,10 +423,6 @@ export const addComment = async (req, res) => {
     const taskId = uuidSchema.parse(req.params.taskId);
     const { commentText } = createCommentTaskSchema.parse(req.body);
     const prisma = await getClientByTenantId(req.tenantId);
-    // const action = await prisma.task.canCreate(taskId, req.userId);
-    // if (!action) {
-    //   throw new UnAuthorizedError();
-    // }
     const comment = await prisma.comments.create({
         data: {
             taskId: taskId,
@@ -518,7 +515,6 @@ export const deleteAttachment = async (req, res) => {
     if (findAttchment) {
         try {
             const name = `${findAttchment.uploadedBy}-${findAttchment.name}`;
-            console.log({ name }, "called");
             await AwsUploadService.deleteFile(name, "task-attachment");
         }
         catch (error) {
@@ -564,8 +560,7 @@ export const taskAssignToUser = async (req, res) => {
             },
         },
     });
-    const activeUsers = usersOfOrganisation.filter((user) => user.user.status === UserStatusEnum.ACTIVE);
-    return new SuccessResponse(StatusCodes.OK, activeUsers, "Get project's users successfully").send(res);
+    return new SuccessResponse(StatusCodes.OK, usersOfOrganisation, "Get project's users successfully").send(res);
 };
 export const addMemberToTask = async (req, res) => {
     if (!req.userId) {
@@ -758,8 +753,8 @@ export const addOrRemoveMilesstone = async (req, res) => {
     const historyMessage = `Task was ${milestoneMessage} as a milestone`;
     const isMilestone = milestoneIndicator;
     const historyData = {
-        oldValue: isMilestone ? null : "true",
-        newValue: isMilestone ? "true" : "false",
+        oldValue: "",
+        newValue: "",
     };
     await prisma.history.createHistory(req.userId, HistoryTypeEnumValue.TASK, historyMessage, historyData, taskId);
     return new SuccessResponse(StatusCodes.OK, milestone, "Milestone updated successfully").send(res);

@@ -28,7 +28,6 @@ class ApiResponse {
         return clone;
     }
 }
-;
 export class SuccessResponse extends ApiResponse {
     data;
     constructor(code, data, message = "Success", returnCode = code) {
@@ -39,7 +38,6 @@ export class SuccessResponse extends ApiResponse {
         return super.prepare(res, this);
     }
 }
-;
 export class ErrorResponse extends ApiResponse {
     data;
     constructor(code, data, message = "Error", returnCode = code) {
@@ -50,7 +48,6 @@ export class ErrorResponse extends ApiResponse {
         return super.prepare(res, this);
     }
 }
-;
 export class ZodResponse extends ApiResponse {
     errors;
     constructor(code, errors, errorMsg = "Error", returnCode = code) {
@@ -61,7 +58,6 @@ export class ZodResponse extends ApiResponse {
         return super.prepare(res, this);
     }
 }
-;
 export class ApiError extends Error {
     type;
     message;
@@ -111,40 +107,33 @@ export class ApiError extends Error {
         }
     }
 }
-;
 export class GenericError extends ApiError {
     constructor(type, message = "Bad Request", data) {
         super(type, message, data);
     }
 }
-;
 export class BadRequestError extends ApiError {
     constructor(message = ReasonPhrases.BAD_REQUEST) {
         super(ReasonPhrases.BAD_REQUEST, message);
     }
 }
-;
 export class InternalServerError extends ApiError {
     constructor(message = ReasonPhrases.INTERNAL_SERVER_ERROR) {
         super(ReasonPhrases.INTERNAL_SERVER_ERROR, message);
     }
 }
-;
 export class UnAuthorizedError extends ApiError {
     constructor(message) {
         super(ReasonPhrases.UNAUTHORIZED, message ? message : ReasonPhrases.UNAUTHORIZED);
     }
 }
-;
 export class ForbiddenError extends ApiError {
     constructor() {
         super(ReasonPhrases.FORBIDDEN, ReasonPhrases.FORBIDDEN);
     }
 }
-;
 export class NotFoundError extends ApiError {
     constructor(message = ReasonPhrases.NOT_FOUND) {
         super(ReasonPhrases.NOT_FOUND, message);
     }
 }
-;

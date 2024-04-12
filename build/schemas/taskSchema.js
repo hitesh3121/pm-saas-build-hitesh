@@ -15,10 +15,10 @@ export const updateTaskSchema = z.object({
     duration: z.number().multipleOf(0.01).optional(),
     completionPecentage: z.number().multipleOf(0.01).optional(),
     status: z.nativeEnum(TaskStatusEnumValue).optional(),
-    kanbanColumnId: z.string().optional()
+    kanbanColumnId: z.string().optional(),
 });
 export const assginedToUserIdSchema = z.object({
-    assginedToUserId: z.string().uuid()
+    assginedToUserId: z.string().uuid(),
 });
 export const taskStatusSchema = z.object({
     status: z.nativeEnum(TaskStatusEnumValue),
@@ -30,9 +30,7 @@ export const attachmentTaskSchema = z.any();
 export const dependenciesTaskSchema = z
     .object({
     dependentType: z.nativeEnum(TaskDependenciesEnumValue),
-    dependendentOnTaskId: z
-        .string({ required_error: "Task required*" })
-        .uuid()
+    dependendentOnTaskId: z.string({ required_error: "Task required*" }).uuid(),
 })
     .refine((data) => {
     const { dependentType, dependendentOnTaskId } = data;
@@ -62,7 +60,6 @@ export const dependenciesTaskSchema = z
     }
     return true;
 });
-export const milestoneTaskSchema = z
-    .object({
+export const milestoneTaskSchema = z.object({
     milestoneIndicator: z.boolean(),
 });

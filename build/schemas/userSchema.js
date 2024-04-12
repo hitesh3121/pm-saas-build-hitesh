@@ -20,11 +20,15 @@ export var TaskColorPaletteEnum;
 })(TaskColorPaletteEnum || (TaskColorPaletteEnum = {}));
 export const userOrgSettingsUpdateSchema = z.object({
     jobTitle: z.string().optional(),
-    taskColour: z.nativeEnum(TaskColorPaletteEnum).default(TaskColorPaletteEnum.BLACK),
+    taskColour: z
+        .nativeEnum(TaskColorPaletteEnum)
+        .default(TaskColorPaletteEnum.BLACK),
 });
 export const avatarImgSchema = z
     .any()
-    .refine((files) => files?.avatarImg?.size <= 1024 * 1024 * 2, { message: "Max file size is 2MB." })
+    .refine((files) => files?.avatarImg?.size <= 1024 * 1024 * 2, {
+    message: "Max file size is 2MB.",
+})
     .refine((files) => ["image/jpeg", "image/jpg", "image/png", "image/webp"].includes(files?.avatarImg?.mimetype), ".jpg, .jpeg, .png and .webp files are accepted.");
 export const changePasswordSchema = z
     .object({

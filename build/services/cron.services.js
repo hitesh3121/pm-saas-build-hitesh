@@ -1,7 +1,7 @@
 import cron from "node-cron";
+import { NotificationTypeEnum, TaskStatusEnum } from "@prisma/client";
 import { getClientByTenantId } from "../config/db.js";
 import { EmailService } from "./email.services.js";
-import { NotificationTypeEnum, TaskStatusEnum } from "@prisma/client";
 import { taskEndDate } from "../utils/calcualteTaskEndDate.js";
 export class CronService {
     static async oneMonthCron() {
