@@ -8,7 +8,6 @@ import { verifyEmailOtpSchema } from "../schemas/authSchema.js";
 import { EmailService } from "../services/email.services.js";
 import { OtpService } from "../services/userOtp.services.js";
 import { AwsUploadService } from "../services/aws.services.js";
-import { generateOTP } from "../utils/otpHelper.js";
 import { compareEncryption, encrypt } from "../utils/encryption.js";
 export const me = async (req, res) => {
     const prisma = await getClientByTenantId(req.tenantId);
@@ -112,13 +111,9 @@ export const resendOTP = async (req, res) => {
     if (findOtp) {
         throw new BadRequestError("Please try again after 1 minute");
     }
-    const otpValue = generateOTP();
-    const subjectMessage = `Login OTP`;
     const expiresInMinutes = 10;
-    const bodyMessage = `Here is your login OTP : ${otpValue}, OTP is valid for ${expiresInMinutes} minutes`;
     try {
-        await EmailService.sendEmail(user.email, subjectMessage, bodyMessage);
-        await OtpService.saveOTP(otpValue, user.userId, req.tenantId, expiresInMinutes * 60);
+        await EmailService.sendOTPTemplate(user.email, user.userId, req.tenantId, expiresInMinutes);
     }
     catch (error) {
         throw new InternalServerError();

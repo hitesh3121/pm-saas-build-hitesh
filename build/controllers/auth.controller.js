@@ -1,4 +1,4 @@
-import { OrgStatusEnum, UserProviderTypeEnum, UserRoleEnum, UserStatusEnum } from "@prisma/client";
+import { OrgStatusEnum, UserProviderTypeEnum, UserRoleEnum, UserStatusEnum, } from "@prisma/client";
 import { getClientByTenantId } from "../config/db.js";
 import { settings } from "../config/settings.js";
 import { createJwtToken, verifyJwtToken } from "../utils/jwtHelper.js";
@@ -6,9 +6,7 @@ import { compareEncryption, encrypt } from "../utils/encryption.js";
 import { BadRequestError, InternalServerError, NotFoundError, SuccessResponse, UnAuthorizedError, } from "../config/apiError.js";
 import { StatusCodes } from "http-status-codes";
 import { authLoginSchema, authRefreshTokenSchema, authSignUpSchema, forgotPasswordSchema, resetPasswordTokenSchema, resetTokenSchema, } from "../schemas/authSchema.js";
-import { generateOTP } from "../utils/otpHelper.js";
 import { EmailService } from "../services/email.services.js";
-import { OtpService } from "../services/userOtp.services.js";
 import { generateRandomToken } from "../utils/generateRandomToken.js";
 import { cookieConfig } from "../utils/setCookies.js";
 export const signUp = async (req, res) => {
@@ -72,23 +70,9 @@ export const signUp = async (req, res) => {
     };
     const token = createJwtToken(tokenPayload);
     const refreshToken = createJwtToken(tokenPayload, true);
-    const otpValue = generateOTP();
-    const subjectMessage = `ProjectChef : One Time Password`;
-    const expiresInMinutes = 10;
-    const bodyMessage = `
-      Hello,
-
-      Kindly find here your One Time Passowrd : ${otpValue}.
-      Please do not share this number with anyone.
-      This number is valid for ${expiresInMinutes} minutes.
-
-      Best Regards,
-      ProjectChef Support Team
-
-      `;
-    await OtpService.saveOTP(otpValue, userId, req.tenantId, expiresInMinutes * 60);
     try {
-        await EmailService.sendEmail(email, subjectMessage, bodyMessage);
+        const expiresInMinutes = 10;
+        await EmailService.sendOTPTemplate(email, userId, req.tenantId, expiresInMinutes);
     }
     catch (error) {
         console.error("Failed to send email", error);
@@ -122,7 +106,8 @@ export const login = async (req, res) => {
     });
     let errorMessage = "Your account is blocked, please contact your administrator";
     if (user.userOrganisation[0]?.role === UserRoleEnum.ADMINISTRATOR) {
-        errorMessage = "Your account is blocked, please contact our support at support@projectchef.io";
+        errorMessage =
+            "Your account is blocked, please contact our support at support@projectchef.io";
     }
     if (user?.status === UserStatusEnum.INACTIVE) {
         throw new BadRequestError(errorMessage);
@@ -145,36 +130,22 @@ export const login = async (req, res) => {
         const token = createJwtToken(tokenPayload);
         res.cookie(settings.jwt.tokenCookieKey, token, {
             ...cookieConfig,
-            maxAge: cookieConfig.maxAgeToken
+            maxAge: cookieConfig.maxAgeToken,
         });
         const refreshToken = createJwtToken(tokenPayload, true);
         res.cookie(settings.jwt.refreshTokenCookieKey, refreshToken, {
             ...cookieConfig,
-            maxAge: cookieConfig.maxAgeRefreshToken
+            maxAge: cookieConfig.maxAgeRefreshToken,
         });
         const { provider, ...userWithoutProvider } = user;
         // Generate and save verify otp
         if (!user.isVerified) {
-            const otpValue = generateOTP();
-            const subjectMessage = `ProjectChef : One Time Password`;
             const expiresInMinutes = 5;
-            const bodyMessage = `
-      Hello,
-
-      Kindly find here your One Time Passowrd : ${otpValue}.
-      Please do not share this number with anyone.
-      This number is valid for ${expiresInMinutes} minutes.
-
-      Best Regards,
-      ProjectChef Support Team
-
-      `;
             try {
-                await OtpService.saveOTP(otpValue, user.userId, req.tenantId, expiresInMinutes * 60);
-                await EmailService.sendEmail(user.email, subjectMessage, bodyMessage);
+                await EmailService.sendOTPTemplate(user.email, user.userId, req.tenantId, expiresInMinutes);
             }
             catch (error) {
-                console.error('Failed to send otp email', error);
+                console.error("Failed to send otp email", error);
             }
         }
         return new SuccessResponse(StatusCodes.OK, { user: userWithoutProvider }, "Login successfully").send(res);
@@ -192,12 +163,12 @@ export const getAccessToken = (req, res) => {
     const token = createJwtToken(tokenPayload);
     res.cookie(settings.jwt.tokenCookieKey, token, {
         ...cookieConfig,
-        maxAge: cookieConfig.maxAgeToken
+        maxAge: cookieConfig.maxAgeToken,
     });
     const refreshToken = createJwtToken(tokenPayload, true);
     res.cookie(settings.jwt.refreshTokenCookieKey, refreshToken, {
         ...cookieConfig,
-        maxAge: cookieConfig.maxAgeRefreshToken
+        maxAge: cookieConfig.maxAgeRefreshToken,
     });
     return new SuccessResponse(StatusCodes.OK, null, "Access token retrived successfully").send(res);
 };
@@ -216,26 +187,15 @@ export const forgotPassword = async (req, res) => {
     const { email } = forgotPasswordSchema.parse(req.body);
     const token = generateRandomToken();
     const prisma = await getClientByTenantId(req.tenantId);
-    const findUser = await prisma.user.findFirst({ where: { email: email, deletedAt: null } });
+    const findUser = await prisma.user.findFirst({
+        where: { email: email, deletedAt: null },
+    });
     if (!findUser)
         throw new NotFoundError("User not found");
     const expiryTimeInMinutes = 10;
     const expirationTime = new Date(Date.now() + expiryTimeInMinutes * 60 * 1000);
-    const subjectMessage = `Reset your ProjectChef password`;
-    const bodyMessage = `
-  Hello,
-
-  We have received your request for password reset for ProjectChef on this account : ${email}. 
-  If you don't want to reset your password, you can ignore this email.
-  If you have received this email in error or you suspect fraud, please let us know at support@projectchef.io
-  URL: ${settings.appURL}/reset-password/?token=${token}
-  
-  Best Regards,
-  ProjectChef Support Team
-
-  `;
     try {
-        await EmailService.sendEmail(email, subjectMessage, bodyMessage);
+        await EmailService.sendResetPasswordTemplate(email, token);
         await prisma.resetPassword.create({
             data: {
                 isUsed: false,
@@ -269,8 +229,8 @@ export const resetPassword = async (req, res) => {
     const findUserProvider = await prisma.userProvider.findFirst({
         where: {
             userId: resetPasswordRecord.userId,
-            providerType: UserProviderTypeEnum.EMAIL
-        }
+            providerType: UserProviderTypeEnum.EMAIL,
+        },
     });
     await prisma.$transaction([
         prisma.resetPassword.update({
@@ -279,17 +239,17 @@ export const resetPassword = async (req, res) => {
                 userId: resetPasswordRecord.userId,
             },
             data: {
-                isUsed: true
-            }
+                isUsed: true,
+            },
         }),
         prisma.userProvider.update({
             where: {
-                userProviderId: findUserProvider?.userProviderId
+                userProviderId: findUserProvider?.userProviderId,
             },
             data: {
-                idOrPassword: hashedPassword
-            }
-        })
+                idOrPassword: hashedPassword,
+            },
+        }),
     ]);
     return new SuccessResponse(StatusCodes.OK, null, "Reset password successfully").send(res);
 };

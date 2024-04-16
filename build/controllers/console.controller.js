@@ -61,13 +61,9 @@ export const loginConsole = async (req, res) => {
         });
         const { password, ...infoWithoutPassword } = user;
         if (!user.isVerified) {
-            const otpValue = generateOTP();
-            const subjectMessage = `Login OTP`;
             const expiresInMinutes = 5;
-            const bodyMessage = `Here is your login OTP : ${otpValue}, OTP is valid for ${expiresInMinutes} minutes`;
             try {
-                await OtpService.saveOTP(otpValue, user.userId, req.tenantId, expiresInMinutes * 60);
-                await EmailService.sendEmail(user.email, subjectMessage, bodyMessage);
+                await EmailService.sendOTPTemplate(user.email, user.userId, req.tenantId, expiresInMinutes);
             }
             catch (error) {
                 console.error("Failed to send otp email", error);
@@ -157,15 +153,7 @@ export const createOperator = async (req, res) => {
         },
     });
     try {
-        const subjectMessage = `Invited`;
-        const bodyMessage = `
-      You are invited in console
-      
-      URL: ${settings.adminURL}login
-      LOGIN: ${newUser.email}
-      PASSWORD: ${randomPassword}
-      `;
-        await EmailService.sendEmail(newUser.email, subjectMessage, bodyMessage);
+        await EmailService.sendInvitationInConsoleTemplate(newUser.email, randomPassword);
     }
     catch (error) {
         console.error("Failed to send email", error);
@@ -505,13 +493,9 @@ export const resendOTP = async (req, res) => {
     if (findOtp) {
         throw new BadRequestError("Please try again after 1 minute");
     }
-    const otpValue = generateOTP();
-    const subjectMessage = `Login OTP`;
     const expiresInMinutes = 10;
-    const bodyMessage = `Here is your login OTP : ${otpValue}, OTP is valid for ${expiresInMinutes} minutes`;
     try {
-        await EmailService.sendEmail(user.email, subjectMessage, bodyMessage);
-        await OtpService.saveOTP(otpValue, user.userId, req.tenantId, expiresInMinutes * 60);
+        await EmailService.sendOTPTemplate(user.email, user.userId, req.tenantId, expiresInMinutes);
     }
     catch (error) {
         throw new InternalServerError();

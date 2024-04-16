@@ -107,19 +107,8 @@ export class CronService {
                     }
                     if (dueTodayTasks.length > 0) {
                         const email = user.email;
-                        const subjectMessage = `ProjectChef: Task Due Today`;
-                        // Send Email
-                        let message = `
-              Hello, ${nameOfUser}
-              
-              Please note that these tasks are due today:
-              Task ${taskNamesString} is due today.
-              
-              Best Regards,
-              ProjectChef Support Team
-              `;
                         try {
-                            await EmailService.sendEmail(email, subjectMessage, message);
+                            await EmailService.sendDueTaskTemplate(email, nameOfUser, taskNamesString);
                         }
                         catch (error) {
                             console.error("Error while sending duetask email", error);

@@ -7,4 +7,6 @@ export const selectUserFields = {
     status: true,
     deletedAt: true,
     isVerified: true,
+    phoneNumber: true,
+    countryCode: true,
 };

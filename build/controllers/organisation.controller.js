@@ -8,7 +8,6 @@ import { createOrganisationSchema, organisationIdSchema, updateOrganisationSchem
 import { encrypt } from "../utils/encryption.js";
 import { uuidSchema } from "../schemas/commonSchema.js";
 import { EmailService } from "../services/email.services.js";
-import { settings } from "../config/settings.js";
 import { generateRandomPassword } from "../utils/generateRandomPassword.js";
 import { selectUserFields } from "../utils/selectedFieldsOfUsers.js";
 import { HistoryTypeEnumValue } from "../schemas/enums.js";
@@ -45,7 +44,7 @@ export const getOrganisationById = async (req, res) => {
     return new SuccessResponse(StatusCodes.OK, organisations, "Organisation selected").send(res);
 };
 export const createOrganisation = async (req, res) => {
-    const { organisationName, industry, status, country, nonWorkingDays } = createOrganisationSchema.parse(req.body);
+    const { organisationName, industry, status, country, nonWorkingDays, phoneNumber, countryCode, } = createOrganisationSchema.parse(req.body);
     if (!req.userId) {
         throw new BadRequestError("userId not found!!");
     }
@@ -78,11 +77,13 @@ export const createOrganisation = async (req, res) => {
     const findUser = await prisma.user.findFirst({
         where: { userId: req.userId },
     });
-    if (findUser?.country === null) {
+    if (findUser) {
         await prisma.user.update({
             where: { userId: req.userId },
             data: {
-                country: country,
+                country: findUser?.country === null ? country : findUser?.country,
+                phoneNumber: phoneNumber,
+                countryCode: countryCode,
             },
         });
     }
@@ -93,7 +94,7 @@ export const updateOrganisation = async (req, res) => {
         throw new BadRequestError("userId not found!");
     }
     const organisationId = organisationIdSchema.parse(req.params.organisationId);
-    const updateOrganisationValue = updateOrganisationSchema.parse(req.body);
+    const { phoneNumber, countryCode, userId, ...withoutCountryAndCode } = updateOrganisationSchema.parse(req.body);
     const prisma = await getClientByTenantId(req.tenantId);
     const organisation = await prisma.organisation.findFirst({
         where: {
@@ -109,7 +110,7 @@ export const updateOrganisation = async (req, res) => {
     if (!organisation.userOrganisation.some((uo) => uo.userId === req.userId && UserRoleEnum.ADMINISTRATOR == uo.role)) {
         throw new ForbiddenError();
     }
-    let updateObj = { ...updateOrganisationValue, updatedByUserId: req.userId };
+    let updateObj = { ...withoutCountryAndCode, updatedByUserId: req.userId };
     const organisationUpdate = await prisma.organisation.update({
         where: {
             organisationId: organisationId,
@@ -121,6 +122,17 @@ export const updateOrganisation = async (req, res) => {
         },
         data: { ...updateObj },
     });
+    if (userId) {
+        await prisma.user.update({
+            where: {
+                userId,
+            },
+            data: {
+                countryCode,
+                phoneNumber,
+            },
+        });
+    }
     return new SuccessResponse(StatusCodes.OK, organisationUpdate, "Organisation updated successfully").send(res);
 };
 export const addOrganisationMember = async (req, res) => {
@@ -186,23 +198,8 @@ export const addOrganisationMember = async (req, res) => {
             else {
                 adminName = newUserOrg?.organisation?.createdByUser.email;
             }
-            const subjectMessage = `You've been Invited to ${newUserOrg?.organisation?.organisationName} organization `;
-            const bodyMessage = `
-      Hello,
-
-      ${adminName} invited you to his/her Organization 
-      ${newUserOrg?.organisation?.organisationName} on ProjectChef.
-      Please use the information bellow to login:
-      
-      URL: ${settings.appURL}/login
-      LOGIN: ${newUser.email}
-      PASSWORD: ${randomPassword}
-
-      Best Regards,
-      ProjectChef Support Team
-
-      `;
-            await EmailService.sendEmail(newUser.email, subjectMessage, bodyMessage);
+            const organisationName = newUserOrg?.organisation?.organisationName;
+            await EmailService.sendEmailForAddUserToOrganisationTemplate(organisationName, adminName, newUser.email, randomPassword);
         }
         catch (error) {
             console.error("Failed to sign up email", error);
@@ -582,22 +579,6 @@ export const resendInvitationToMember = async (req, res) => {
         else {
             adminName = findMember?.organisation?.createdByUser.email;
         }
-        const subjectMessage = `You’ve been Invited to ${findMember?.organisation?.organisationName} organization `;
-        const bodyMessage = `
-      Hello,
-
-      ${adminName} invited you to his/her Organization 
-      ${findMember?.organisation?.organisationName} on ProjectChef.
-      Please use the information bellow to login:
-      
-      URL: ${settings.appURL}/login
-      LOGIN: ${findMember.user.email}
-      PASSWORD: ${randomPassword}
-
-      Best Regards,
-      ProjectChef Support Team
-
-      `;
         const findProvider = await prisma.userProvider.findFirstOrThrow({
             where: {
                 userId: findMember.user.userId,
@@ -613,7 +594,8 @@ export const resendInvitationToMember = async (req, res) => {
                 providerType: UserProviderTypeEnum.EMAIL,
             },
         });
-        await EmailService.sendEmail(findMember.user.email, subjectMessage, bodyMessage);
+        const organisationName = findMember?.organisation?.organisationName;
+        await EmailService.sendEmailForAddUserToOrganisationTemplate(organisationName, adminName, findMember.user.email, randomPassword);
     }
     catch (error) {
         console.error("Failed resend email", error);
