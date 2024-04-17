@@ -323,9 +323,12 @@ export const deleteProject = async (req, res) => {
             organisationId: req.organisationId,
             deletedAt: null,
         },
+        include: {
+            tasks: true,
+        },
     });
     const otpValue = generateOTP();
-    await prisma.project.update({
+    const deletedProjects = await prisma.project.update({
         where: { projectId },
         data: {
             deletedAt: new Date(),
@@ -337,6 +340,28 @@ export const deleteProject = async (req, res) => {
             },
         },
     });
+    if (deletedProjects && findProject.tasks) {
+        try {
+            const taskDeletedUpdated = findProject.tasks.map(async (task) => {
+                const updatedTask = await prisma.task.update({
+                    where: { taskId: task.taskId },
+                    data: {
+                        deletedAt: new Date(),
+                        taskName: `${task.taskName}_deleted_${otpValue}`,
+                        assignedUsers: {
+                            deleteMany: {
+                                taskId: task.taskId,
+                            },
+                        },
+                    },
+                });
+            });
+            await Promise.all(taskDeletedUpdated);
+        }
+        catch (error) {
+            console.error("Error while deleting task", error);
+        }
+    }
     return new SuccessResponse(StatusCodes.OK, null, "project deleted successfully").send(res);
 };
 export const updateProject = async (req, res) => {

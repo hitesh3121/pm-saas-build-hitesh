@@ -13,6 +13,7 @@ import { selectUserFields } from "../utils/selectedFieldsOfUsers.js";
 import { HistoryTypeEnumValue } from "../schemas/enums.js";
 import { AwsUploadService } from "../services/aws.services.js";
 import { generateOTP } from "../utils/otpHelper.js";
+import { createDemoProjectsCommon } from "../utils/demoProjects.js";
 export const getOrganisationById = async (req, res) => {
     const organisationId = organisationIdSchema.parse(req.params.organisationId);
     const prisma = await getClientByTenantId(req.tenantId);
@@ -44,7 +45,7 @@ export const getOrganisationById = async (req, res) => {
     return new SuccessResponse(StatusCodes.OK, organisations, "Organisation selected").send(res);
 };
 export const createOrganisation = async (req, res) => {
-    const { organisationName, industry, status, country, nonWorkingDays, phoneNumber, countryCode, } = createOrganisationSchema.parse(req.body);
+    const { organisationName, industry, status, country, nonWorkingDays, phoneNumber, countryCode, createDemoProjects, } = createOrganisationSchema.parse(req.body);
     if (!req.userId) {
         throw new BadRequestError("userId not found!!");
     }
@@ -74,6 +75,14 @@ export const createOrganisation = async (req, res) => {
             nonWorkingDays: nonWorkingDays ?? [],
         },
     });
+    if (organisation && createDemoProjects) {
+        try {
+            await createDemoProjectsCommon(req.tenantId, req.userId, organisation.organisationId);
+        }
+        catch (error) {
+            console.error(error);
+        }
+    }
     const findUser = await prisma.user.findFirst({
         where: { userId: req.userId },
     });
@@ -794,4 +803,17 @@ export const changePmToTm = async (req, res) => {
         }),
     ]);
     return new SuccessResponse(StatusCodes.OK, null, "Role updated successfully.").send(res);
+};
+export const createDemoProject = async (req, res) => {
+    if (!req.userId) {
+        throw new BadRequestError("Please provide userId!!");
+    }
+    const organisationId = uuidSchema.parse(req.params.organisationId);
+    try {
+        await createDemoProjectsCommon(req.tenantId, req.userId, organisationId);
+    }
+    catch (error) {
+        console.error(error);
+    }
+    return new SuccessResponse(StatusCodes.CREATED, null, "Demo project created successfully.").send(res);
 };

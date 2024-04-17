@@ -3,6 +3,7 @@ import { UserRoleEnum } from "@prisma/client";
 import * as OrganisationControlller from "../controllers/organisation.controller.js";
 import { roleMiddleware } from "../middleware/role.middleware.js";
 let router = express.Router();
+router.get("/demo-project/:organisationId", OrganisationControlller.createDemoProject);
 router.get("/:organisationId", OrganisationControlller.getOrganisationById);
 router.put("/organisationUserBlockUnblock", OrganisationControlller.organisationUserBlockUnblock);
 router.post("/changePmToTm", roleMiddleware([UserRoleEnum.ADMINISTRATOR]), OrganisationControlller.changePmToTm);

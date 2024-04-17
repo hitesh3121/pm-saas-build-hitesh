@@ -16,11 +16,10 @@ export const createOrganisationSchema = z.object({
     industry: z.string().min(1),
     status: z.nativeEnum(OrgStatusEnumValue),
     country: z.string().min(1),
-    phoneNumber: z
-        .string()
-        .max(10).optional(),
+    phoneNumber: z.string().max(10).optional(),
     countryCode: z.string().min(1).optional(),
     nonWorkingDays: z.nativeEnum(OrgListOfNonWorkingDaysEnum).array().optional(),
+    createDemoProjects: z.boolean().optional(),
 });
 export const updateOrganisationSchema = z.object({
     organisationName: z.string().min(1).optional(),
@@ -29,9 +28,7 @@ export const updateOrganisationSchema = z.object({
     country: z.string().min(1).optional(),
     nonWorkingDays: z.nativeEnum(OrgListOfNonWorkingDaysEnum).array().optional(),
     jobTitlesOfOrg: z.string().array().optional(),
-    phoneNumber: z
-        .string()
-        .max(10).optional(),
+    phoneNumber: z.string().max(10).optional(),
     countryCode: z.string().min(1).optional(),
     userId: z.string().uuid(),
 });
