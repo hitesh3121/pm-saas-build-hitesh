@@ -565,6 +565,13 @@ export const createDemoProjectsCommon = async (tenantId, createdByUserId, organi
                         estimatedEndDate: initialEstimatedEndDate,
                         currency: project.currency,
                         createdByUserId: createdByUserId,
+                        kanbanColumns: {
+                            create: {
+                                name: "Backlog",
+                                percentage: null,
+                                createdByUserId: createdByUserId,
+                            },
+                        },
                     },
                 });
                 if (createProject && project.tasks) {
