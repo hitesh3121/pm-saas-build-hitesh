@@ -24,7 +24,7 @@ router.get("/:projectId", roleMiddleware([
     UserRoleEnum.TEAM_MEMBER,
 ]), ProjectController.getProjectById);
 router.post("/", roleMiddleware([UserRoleEnum.ADMINISTRATOR, UserRoleEnum.PROJECT_MANAGER]), ProjectController.createProject);
-router.delete("/:projectId", roleMiddleware([UserRoleEnum.ADMINISTRATOR]), ProjectController.deleteProject);
+router.delete("/:projectId", roleMiddleware([UserRoleEnum.ADMINISTRATOR, UserRoleEnum.PROJECT_MANAGER]), ProjectController.deleteProject);
 router.put("/status/:projectId", roleMiddleware([UserRoleEnum.ADMINISTRATOR, UserRoleEnum.PROJECT_MANAGER]), ProjectController.statusChangeProject);
 router.put("/:projectId", roleMiddleware([UserRoleEnum.ADMINISTRATOR, UserRoleEnum.PROJECT_MANAGER]), ProjectController.updateProject);
 router.put("consumed-budget/:projectId", roleMiddleware([UserRoleEnum.ADMINISTRATOR, UserRoleEnum.PROJECT_MANAGER]), ProjectController.addConsumedBudgetToProject);

@@ -657,7 +657,8 @@ export const assignProjectAndRoleToUser = async (req, res) => {
         });
         if (findPM &&
             item.projectRoleForUser === UserRoleEnum.PROJECT_MANAGER &&
-            !isRoleChangePmToTm) {
+            !isRoleChangePmToTm &&
+            findPM.assginedToUserId !== findUserOrg.userId) {
             throw new BadRequestError("Project Manager already exists!!");
         }
         else if (findPM &&

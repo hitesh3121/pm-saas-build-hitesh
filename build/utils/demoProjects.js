@@ -1,3 +1,4 @@
+import { UserRoleEnum } from "@prisma/client";
 import { getClientByTenantId } from "../config/db.js";
 function calculateEndDateAndDurationFromWeek(startWeek, endWeek, nonWorkingDays) {
     const daysPerWeek = 7 - nonWorkingDays.length;
@@ -570,6 +571,12 @@ export const createDemoProjectsCommon = async (tenantId, createdByUserId, organi
                                 name: "Backlog",
                                 percentage: null,
                                 createdByUserId: createdByUserId,
+                            },
+                        },
+                        assignedUsers: {
+                            create: {
+                                assginedToUserId: createdByUserId,
+                                projectRole: UserRoleEnum.ADMINISTRATOR,
                             },
                         },
                     },
