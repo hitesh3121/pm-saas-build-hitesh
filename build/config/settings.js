@@ -1,4 +1,4 @@
-const { PORT, PRIVATE_KEY_FOR_JWT, EMAIL_ACCESS_KEY_ID, EMAIL_SECRET_ACCESS_KEY, EMAIL_REGION, APP_URL, ROOT_USER_USERNAME, ROOT_USER_PASSWORD, NO_REPLY_EMAIL, GOOGLE_CLIENT_ID, GOOGLE_SECRET, GOOGLE_CALLBACK_URL, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_BUCKET_NAME, ENV_NAME, ADMIN_URL, } = process.env;
+const { PORT, PRIVATE_KEY_FOR_JWT, EMAIL_ACCESS_KEY_ID, EMAIL_SECRET_ACCESS_KEY, EMAIL_REGION, APP_URL, ROOT_USER_USERNAME, ROOT_USER_PASSWORD, NO_REPLY_EMAIL, GOOGLE_CLIENT_ID, GOOGLE_SECRET, GOOGLE_CALLBACK_URL, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_BUCKET_NAME, ENV_NAME, ADMIN_URL, BREVO_API_KEY, } = process.env;
 if (!PRIVATE_KEY_FOR_JWT) {
     throw Error("Missing jwt private key in .env");
 }
@@ -31,6 +31,9 @@ if (!ENV_NAME) {
 }
 if (!ADMIN_URL) {
     throw Error("Missing ADMIN_URL in .env");
+}
+if (!BREVO_API_KEY) {
+    throw Error("Missing BREVO_API_KEY in .env");
 }
 export const settings = {
     port: PORT ?? 8000,
@@ -69,4 +72,5 @@ export const settings = {
     environment: ENV_NAME,
     domain: ".projectchef.io",
     hours: 24,
+    brevoApiKey: BREVO_API_KEY,
 };

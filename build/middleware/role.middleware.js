@@ -17,7 +17,7 @@ export const roleMiddleware = (allowedRoles) => {
             rolesToCheck.push(...newRole.filter((role) => role !== null));
         }
         const hasAccess = allowedRoles.some((role) => rolesToCheck.includes(role));
-        if (!hasAccess) {
+        if (!newRole && !hasAccess) {
             throw new UnAuthorizedError();
         }
         req.role = rolesToCheck[0]; //User role

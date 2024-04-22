@@ -6,6 +6,7 @@ import { compareEncryption, encrypt } from "../utils/encryption.js";
 import { BadRequestError, InternalServerError, NotFoundError, SuccessResponse, UnAuthorizedError, } from "../config/apiError.js";
 import { StatusCodes } from "http-status-codes";
 import { authLoginSchema, authRefreshTokenSchema, authSignUpSchema, forgotPasswordSchema, resetPasswordTokenSchema, resetTokenSchema, } from "../schemas/authSchema.js";
+import { BrevoService } from "../services/brevo.services.js";
 import { EmailService } from "../services/email.services.js";
 import { generateRandomToken } from "../utils/generateRandomToken.js";
 import { cookieConfig } from "../utils/setCookies.js";
@@ -76,6 +77,13 @@ export const signUp = async (req, res) => {
     }
     catch (error) {
         console.error("Failed to send email", error);
+    }
+    // Brevo API call
+    try {
+        await BrevoService.createOrUpdateContact(email, firstName, lastName);
+    }
+    catch (error) {
+        console.error(error);
     }
     res.cookie(settings.jwt.tokenCookieKey, token, {
         ...cookieConfig,

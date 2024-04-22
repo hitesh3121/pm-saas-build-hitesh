@@ -588,6 +588,7 @@ export const createDemoProjectsCommon = async (tenantId, createdByUserId, organi
                             data: {
                                 projectId: createProject.projectId,
                                 taskName: task.taskName,
+                                taskDescription: "",
                                 startDate: initialStartDate,
                                 duration: task.duration == null ? intialDurationInDays : task.duration,
                                 parentTaskId: null,
@@ -602,6 +603,7 @@ export const createDemoProjectsCommon = async (tenantId, createdByUserId, organi
                                     data: {
                                         projectId: createProject.projectId,
                                         taskName: sub.taskName,
+                                        taskDescription: "",
                                         startDate: initialStartDate,
                                         duration: sub.duration == null
                                             ? intialDurationInDays
