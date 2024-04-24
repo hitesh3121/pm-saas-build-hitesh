@@ -1,5 +1,5 @@
 import { StatusCodes } from "http-status-codes";
-import { NotificationTypeEnum, TaskStatusEnum, UserStatusEnum, MilestoneIndicatorStatusEnum, } from "@prisma/client";
+import { NotificationTypeEnum, TaskStatusEnum, UserStatusEnum, MilestoneIndicatorStatusEnum, TaskDependenciesEnum, } from "@prisma/client";
 import { getClientByTenantId } from "../config/db.js";
 import { BadRequestError, NotFoundError, SuccessResponse, UnAuthorizedError, } from "../config/apiError.js";
 import { projectIdSchema } from "../schemas/projectSchema.js";
@@ -17,6 +17,8 @@ import { calculateDurationAndPercentage, checkTaskStatus, } from "../utils/taskR
 import { generateOTP } from "../utils/otpHelper.js";
 import { attachmentAddOrRemove, commentEditorDelete, dependenciesAddOrRemove, taskUpdateOrDelete, } from "../middleware/role.middleware.js";
 import { enumToString } from "../utils/enumToString.js";
+import { addDependenciesHelper, dependenciesManage, } from "../utils/handleDependencies.js";
+import { reAssginedTaskSchema } from "../schemas/organisationSchema.js";
 export const getTasks = async (req, res) => {
     if (!req.organisationId) {
         throw new BadRequestError("organisationId not found!!");
@@ -230,6 +232,29 @@ export const updateTask = async (req, res) => {
     if (!hasAccessIf) {
         throw new UnAuthorizedError("You are not authorized to edit tasks which are not assigned to you");
     }
+    if (taskUpdateValue.startDate ||
+        (taskUpdateValue.completionPecentage &&
+            taskUpdateValue.completionPecentage > 0)) {
+        for (let obj of findtask.dependencies) {
+            if (obj.dependentType === TaskDependenciesEnum.PREDECESSORS) {
+                const dependencyTask = await prisma.task.findFirst({
+                    where: { taskId: obj.dependendentOnTaskId, deletedAt: null },
+                });
+                if (taskUpdateValue.completionPecentage &&
+                    dependencyTask &&
+                    dependencyTask.status !== TaskStatusEnum.COMPLETED) {
+                    throw new BadRequestError("You can not change the progress percentage of this task as it have predecessors dependency.");
+                }
+                if (dependencyTask) {
+                    const endDateDependencyTask = new Date(await taskEndDate(dependencyTask, req.tenantId, req.organisationId));
+                    if (taskUpdateValue.startDate &&
+                        endDateDependencyTask > new Date(taskUpdateValue.startDate)) {
+                        throw new BadRequestError(`This task has an end to start dependency with ${dependencyTask.taskName}. Would you like to remove the dependency?`);
+                    }
+                }
+            }
+        }
+    }
     const taskUpdateDB = await prisma.task.update({
         where: { taskId: taskId },
         data: {
@@ -239,12 +264,31 @@ export const updateTask = async (req, res) => {
         include: {
             documentAttachments: true,
             assignedUsers: true,
-            dependencies: true,
+            dependencies: {
+                include: {
+                    dependentOnTask: true,
+                },
+            },
             project: true,
             parent: true,
             subtasks: true,
         },
     });
+    if (taskUpdateDB &&
+        taskUpdateDB.dependencies &&
+        taskUpdateDB.dependencies.length > 0) {
+        const endDate = await taskEndDate(taskUpdateDB, req.tenantId, req.organisationId);
+        for (let dependantTask of taskUpdateDB.dependencies) {
+            try {
+                if (dependantTask.dependentType === TaskDependenciesEnum.SUCCESSORS) {
+                    await dependenciesManage(req.tenantId, req.organisationId, dependantTask.dependendentOnTaskId, new Date(endDate), req.userId);
+                }
+            }
+            catch (error) {
+                console.log(error, "while dependent recustion");
+            }
+        }
+    }
     // Handle - parent- duration and end date
     if (taskUpdateDB.parent?.taskId) {
         await calculateDurationAndPercentage(taskUpdateDB.parent.taskId, req.tenantId, req.organisationId);
@@ -321,6 +365,16 @@ export const deleteTask = async (req, res) => {
                     taskId,
                 },
             },
+            dependentOnTask: {
+                deleteMany: {
+                    dependendentOnTaskId: taskId,
+                },
+            },
+            dependencies: {
+                deleteMany: {
+                    dependentTaskId: taskId,
+                },
+            },
         },
         include: {
             comments: true,
@@ -357,6 +411,20 @@ export const statusChangeTask = async (req, res) => {
     const { hasAccessIf, findtask } = await taskUpdateOrDelete(taskId, req.role, req.userId, req.tenantId);
     if (!hasAccessIf) {
         throw new UnAuthorizedError("You are not authorized to edit tasks which are not assigned to you");
+    }
+    if (statusBody.status === TaskStatusEnum.IN_PROGRESS ||
+        statusBody.status === TaskStatusEnum.COMPLETED) {
+        for (let obj of findtask.dependencies) {
+            if (obj.dependentType === TaskDependenciesEnum.PREDECESSORS) {
+                const dependencyTask = await prisma.task.findFirst({
+                    where: { taskId: obj.dependendentOnTaskId, deletedAt: null },
+                });
+                if (dependencyTask &&
+                    dependencyTask.status !== TaskStatusEnum.COMPLETED) {
+                    throw new BadRequestError("You can not change the status of this task as it have predecessors dependency.");
+                }
+            }
+        }
     }
     let completionPercentage = 0;
     if (statusBody.status === TaskStatusEnum.COMPLETED) {
@@ -637,6 +705,9 @@ export const addDependencies = async (req, res) => {
     if (!req.userId) {
         throw new BadRequestError("userId not found!!");
     }
+    if (!req.organisationId) {
+        throw new BadRequestError("organisationId not found!!");
+    }
     const taskId = uuidSchema.parse(req.params.taskId);
     const prisma = await getClientByTenantId(req.tenantId);
     const { hasAccessIf, dependencies, findTask } = await dependenciesAddOrRemove(taskId, req.role, req.userId, req.tenantId, "Add");
@@ -653,29 +724,20 @@ export const addDependencies = async (req, res) => {
     if (findDependencies) {
         throw new BadRequestError("Already have dependencies on this task!!");
     }
-    const addDependencies = await prisma.taskDependencies.create({
-        data: {
-            dependentType: dependentType,
-            dependentTaskId: taskId,
-            dependendentOnTaskId: dependendentOnTaskId,
-            dependenciesAddedBy: req.userId,
-        },
-        include: {
-            dependentOnTask: {
-                select: {
-                    taskName: true,
-                },
-            },
-        },
-    });
-    // History-Manage
-    const historyMessage = "Task’s dependency was added";
-    const historyData = {
+    const [addDependencies1, addDependencies2] = await addDependenciesHelper(taskId, dependendentOnTaskId, req.tenantId, req.organisationId, req.userId, dependentType);
+    const historyMessage1 = "Task's dependency was added";
+    const historyData1 = {
         oldValue: null,
-        newValue: addDependencies.dependentOnTask.taskName,
+        newValue: addDependencies1.dependentOnTask.taskName,
     };
-    await prisma.history.createHistory(req.userId, HistoryTypeEnumValue.TASK, historyMessage, historyData, taskId);
-    return new SuccessResponse(StatusCodes.OK, addDependencies, "Dependencies added successfully").send(res);
+    await prisma.history.createHistory(req.userId, HistoryTypeEnumValue.TASK, historyMessage1, historyData1, addDependencies1.dependentTaskId);
+    const historyMessage2 = "Task's dependency was added";
+    const historyData2 = {
+        oldValue: null,
+        newValue: addDependencies2.dependentOnTask.taskName,
+    };
+    await prisma.history.createHistory(req.userId, HistoryTypeEnumValue.TASK, historyMessage2, historyData2, addDependencies1.dependendentOnTaskId);
+    return new SuccessResponse(StatusCodes.OK, null, "Dependencies added successfully").send(res);
 };
 export const removeDependencies = async (req, res) => {
     if (!req.userId) {
@@ -687,25 +749,56 @@ export const removeDependencies = async (req, res) => {
     if (!hasAccessIf) {
         throw new UnAuthorizedError("You are not authorized to remove dependencies");
     }
-    const deletedTask = await prisma.taskDependencies.delete({
+    const findOneDependent = await prisma.taskDependencies.findFirst({
         where: {
             taskDependenciesId: taskDependenciesId,
         },
-        include: {
-            dependentOnTask: {
-                select: {
-                    taskName: true,
-                },
-            },
+    });
+    const findSecondDependent = await prisma.taskDependencies.findFirst({
+        where: {
+            dependendentOnTaskId: findOneDependent?.dependentTaskId,
+            dependentTaskId: findOneDependent?.dependendentOnTaskId,
         },
     });
+    const [deleteOne, deleteTwo] = await prisma.$transaction([
+        prisma.taskDependencies.delete({
+            where: {
+                taskDependenciesId: taskDependenciesId,
+            },
+            include: {
+                dependentOnTask: {
+                    select: {
+                        taskName: true,
+                    },
+                },
+            },
+        }),
+        prisma.taskDependencies.delete({
+            where: {
+                taskDependenciesId: findSecondDependent?.taskDependenciesId,
+            },
+            include: {
+                dependentOnTask: {
+                    select: {
+                        taskName: true,
+                    },
+                },
+            },
+        }),
+    ]);
     // History-Manage
-    const historyMessage = "Task’s dependency was removed";
-    const historyData = {
-        oldValue: deletedTask.dependentOnTask.taskName,
+    const historyMessage1 = "Task’s dependency was removed";
+    const historyData1 = {
+        oldValue: deleteOne.dependentOnTask.taskName,
         newValue: null,
     };
-    await prisma.history.createHistory(req.userId, HistoryTypeEnumValue.TASK, historyMessage, historyData, deletedTask.dependentTaskId);
+    await prisma.history.createHistory(req.userId, HistoryTypeEnumValue.TASK, historyMessage1, historyData1, deleteOne.dependentTaskId);
+    const historyMessage2 = "Task’s dependency was removed";
+    const historyData2 = {
+        oldValue: deleteTwo.dependentOnTask.taskName,
+        newValue: null,
+    };
+    await prisma.history.createHistory(req.userId, HistoryTypeEnumValue.TASK, historyMessage2, historyData2, deleteTwo.dependentTaskId);
     return new SuccessResponse(StatusCodes.OK, null, "Dependencies removed successfully").send(res);
 };
 export const addOrRemoveMilesstone = async (req, res) => {
@@ -763,4 +856,81 @@ export const addOrRemoveMilesstone = async (req, res) => {
     };
     await prisma.history.createHistory(req.userId, HistoryTypeEnumValue.TASK, historyMessage, historyData, taskId);
     return new SuccessResponse(StatusCodes.OK, milestone, "Milestone updated successfully").send(res);
+};
+export const reAssignTaskToOtherUser = async (req, res) => {
+    const userId = req.userId;
+    if (!userId) {
+        throw new BadRequestError("userId not found!");
+    }
+    const prisma = await getClientByTenantId(req.tenantId);
+    const projectId = uuidSchema.parse(req.params.projectId);
+    const { oldUserId, newUserId } = reAssginedTaskSchema.parse(req.body);
+    const oldUsersTasks = await prisma.taskAssignUsers.findMany({
+        where: {
+            assginedToUserId: oldUserId,
+            deletedAt: null,
+            task: {
+                projectId,
+            },
+        },
+        include: {
+            task: true,
+        },
+    });
+    for (const oldUsersTask of oldUsersTasks) {
+        const deletedUser = await prisma.taskAssignUsers.delete({
+            where: {
+                taskAssignUsersId: oldUsersTask.taskAssignUsersId,
+                taskId: oldUsersTask.taskId,
+                task: {
+                    projectId,
+                },
+            },
+            include: {
+                user: {
+                    select: {
+                        email: true,
+                    },
+                },
+            },
+        });
+        const userExistInTask = await prisma.taskAssignUsers.findFirst({
+            where: {
+                assginedToUserId: newUserId,
+                taskId: oldUsersTask.taskId,
+                task: {
+                    projectId,
+                },
+                deletedAt: null,
+            },
+        });
+        if (!userExistInTask) {
+            const newCreatedUser = await prisma.taskAssignUsers.create({
+                data: {
+                    assginedToUserId: newUserId,
+                    taskId: oldUsersTask.taskId,
+                },
+                include: {
+                    user: {
+                        select: {
+                            email: true,
+                        },
+                    },
+                },
+            });
+            //Send notification
+            const message = `Task reassigned to you`;
+            await prisma.notification.sendNotification(NotificationTypeEnum.TASK, message, newUserId, userId, oldUsersTask.taskId);
+            // History-Manage
+            const historyMessage = "Task's assignee changed from";
+            const historyData = {
+                oldValue: deletedUser?.user?.email,
+                newValue: newCreatedUser
+                    ? newCreatedUser.user.email
+                    : deletedUser?.user.email,
+            };
+            await prisma.history.createHistory(userId, HistoryTypeEnumValue.TASK, historyMessage, historyData, oldUsersTask.taskId);
+        }
+    }
+    return new SuccessResponse(StatusCodes.OK, null, "Tasks reassigned successfully.").send(res);
 };

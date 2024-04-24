@@ -85,4 +85,8 @@ router.post("/:projectId/:parentTaskId?", roleMiddleware([
     UserRoleEnum.PROJECT_MANAGER,
     UserRoleEnum.TEAM_MEMBER,
 ]), TaskController.createTask);
+router.put("/reAssignTaskToOtherUser/:projectId", roleMiddleware([
+    UserRoleEnum.ADMINISTRATOR,
+    UserRoleEnum.PROJECT_MANAGER,
+]), TaskController.reAssignTaskToOtherUser);
 export default router;

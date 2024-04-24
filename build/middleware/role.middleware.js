@@ -35,6 +35,12 @@ export const taskUpdateOrDelete = async (taskId, role, userId, tenantId) => {
             documentAttachments: true,
             assignedUsers: true,
             subtasks: true,
+            dependencies: {
+                where: { deletedAt: null },
+                include: {
+                    dependentOnTask: true,
+                },
+            },
         },
     });
     const isCreatedByuser = findtask.createdByUserId === userId;
