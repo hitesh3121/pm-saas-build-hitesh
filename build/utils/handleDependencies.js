@@ -1,7 +1,7 @@
 import { TaskDependenciesEnum } from "@prisma/client";
 import { getClientByTenantId } from "../config/db.js";
 import { taskEndDate } from "./calcualteTaskEndDate.js";
-import { calculateDurationAndPercentage } from "./taskRecursion.js";
+import { calculateDurationAndPercentage, updateSubtasksDependencies, } from "./taskRecursion.js";
 import { BadRequestError } from "../config/apiError.js";
 export const dependenciesManage = async (tenantId, organisationId, taskId, endDate, userId) => {
     const prisma = await getClientByTenantId(tenantId);
@@ -22,7 +22,7 @@ export const dependenciesManage = async (tenantId, organisationId, taskId, endDa
         const taskUpdateDB = await prisma.task.update({
             where: { taskId: findTask.taskId },
             data: {
-                startDate: findTask.startDate < endDate ? endDate : findTask.startDate,
+                startDate: endDate, // findTask.startDate < endDate ? endDate : findTask.startDate,
                 updatedByUserId: userId,
             },
             include: {
@@ -39,6 +39,9 @@ export const dependenciesManage = async (tenantId, organisationId, taskId, endDa
             },
         });
         const endDateOfOne = await taskEndDate(taskUpdateDB, tenantId, organisationId);
+        for (let task of taskUpdateDB.subtasks) {
+            await updateSubtasksDependencies(task.taskId, endDate, userId, tenantId);
+        }
         if (taskUpdateDB.parent?.taskId) {
             await calculateDurationAndPercentage(taskUpdateDB.parent?.taskId, tenantId, organisationId);
         }

@@ -136,3 +136,21 @@ export const timeline = async (taskId, tenantId, organisationId) => {
     }
     return { earliestStartDate, highestEndDate };
 };
+export const updateSubtasksDependencies = async (taskId, endDate, userId, tenantId) => {
+    const prisma = await getClientByTenantId(tenantId);
+    const taskUpdateDB = await prisma.task.update({
+        where: { taskId },
+        data: {
+            startDate: endDate,
+            updatedByUserId: userId,
+        },
+        include: {
+            subtasks: true,
+        },
+    });
+    if (taskUpdateDB.subtasks && taskUpdateDB.subtasks.length > 0) {
+        for (let sub of taskUpdateDB.subtasks) {
+            await updateSubtasksDependencies(sub.taskId, endDate, userId, tenantId);
+        }
+    }
+};
