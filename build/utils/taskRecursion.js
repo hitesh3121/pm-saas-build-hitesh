@@ -154,3 +154,44 @@ export const updateSubtasksDependencies = async (taskId, endDate, userId, tenant
         }
     }
 };
+export const updateSubtasks = async (allSubTasks, endDateDependentTask, userId, tenantId) => {
+    const prisma = await getClientByTenantId(tenantId);
+    for (const singleSubTask of allSubTasks) {
+        const updatedSubtask = await prisma.task.update({
+            where: { taskId: singleSubTask.taskId },
+            data: {
+                startDate: new Date(endDateDependentTask),
+                updatedByUserId: userId,
+            },
+            include: {
+                subtasks: {
+                    where: { deletedAt: null },
+                    include: { subtasks: true },
+                },
+            },
+        });
+        if (updatedSubtask && updatedSubtask.subtasks) {
+            await updateSubtasks(updatedSubtask.subtasks, endDateDependentTask, userId, tenantId);
+        }
+    }
+};
+export const deleteSubtasks = async (taskId, taskName, otpValue, tenantId) => {
+    const prisma = await getClientByTenantId(tenantId);
+    const updatedTask = await prisma.task.update({
+        where: {
+            taskId: taskId,
+        },
+        data: {
+            deletedAt: new Date(),
+            taskName: `${taskName}_deleted_${otpValue}`,
+        },
+        include: {
+            subtasks: true,
+        },
+    });
+    if (updatedTask && updatedTask.subtasks) {
+        for (const checkSub of updatedTask.subtasks) {
+            await deleteSubtasks(checkSub.taskId, checkSub.taskName, otpValue, tenantId);
+        }
+    }
+};

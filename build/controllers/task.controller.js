@@ -13,11 +13,11 @@ import { selectUserFields } from "../utils/selectedFieldsOfUsers.js";
 import { calculationSubTaskProgression } from "../utils/calculationSubTaskProgression.js";
 import { taskFlag } from "../utils/calculationFlag.js";
 import { calculateProjectEndDate } from "../utils/calculateProjectEndDate.js";
-import { calculateDurationAndPercentage, checkTaskStatus, } from "../utils/taskRecursion.js";
+import { calculateDurationAndPercentage, checkTaskStatus, deleteSubtasks, } from "../utils/taskRecursion.js";
 import { generateOTP } from "../utils/otpHelper.js";
 import { attachmentAddOrRemove, commentEditorDelete, dependenciesAddOrRemove, taskUpdateOrDelete, } from "../middleware/role.middleware.js";
 import { enumToString } from "../utils/enumToString.js";
-import { addDependenciesHelper, dependenciesManage, } from "../utils/handleDependencies.js";
+import { addDependenciesHelper, dependenciesManage, handleSubTaskUpdation, } from "../utils/handleDependencies.js";
 import { reAssginedTaskSchema } from "../schemas/organisationSchema.js";
 export const getTasks = async (req, res) => {
     if (!req.organisationId) {
@@ -235,25 +235,7 @@ export const updateTask = async (req, res) => {
     if (taskUpdateValue.startDate ||
         (taskUpdateValue.completionPecentage &&
             taskUpdateValue.completionPecentage > 0)) {
-        for (let obj of findtask.dependencies) {
-            if (obj.dependentType === TaskDependenciesEnum.PREDECESSORS) {
-                const dependencyTask = await prisma.task.findFirst({
-                    where: { taskId: obj.dependendentOnTaskId, deletedAt: null },
-                });
-                if (taskUpdateValue.completionPecentage &&
-                    dependencyTask &&
-                    dependencyTask.status !== TaskStatusEnum.COMPLETED) {
-                    throw new BadRequestError("You can not change the progress percentage of this task as it have predecessors dependency.");
-                }
-                if (dependencyTask) {
-                    const endDateDependencyTask = new Date(await taskEndDate(dependencyTask, req.tenantId, req.organisationId));
-                    if (taskUpdateValue.startDate &&
-                        endDateDependencyTask > new Date(taskUpdateValue.startDate)) {
-                        throw new BadRequestError(`This task has an end to start dependency with ${dependencyTask.taskName}. Would you like to remove the dependency?`);
-                    }
-                }
-            }
-        }
+        await handleSubTaskUpdation(req.tenantId, req.organisationId, findtask.taskId, taskUpdateValue.completionPecentage ? true : false, taskId, taskUpdateValue.startDate);
     }
     const taskUpdateDB = await prisma.task.update({
         where: { taskId: taskId },
@@ -262,16 +244,22 @@ export const updateTask = async (req, res) => {
             updatedByUserId: req.userId,
         },
         include: {
-            documentAttachments: true,
-            assignedUsers: true,
+            documentAttachments: { where: { deletedAt: null } },
+            assignedUsers: {
+                where: { deletedAt: null },
+            },
             dependencies: {
                 include: {
                     dependentOnTask: true,
                 },
             },
             project: true,
-            parent: true,
-            subtasks: true,
+            parent: {
+                where: { deletedAt: null },
+            },
+            subtasks: {
+                where: { deletedAt: null },
+            },
         },
     });
     if (taskUpdateDB &&
@@ -341,7 +329,43 @@ export const updateTask = async (req, res) => {
         }
     }
     const statusHandle = await checkTaskStatus(taskId, req.tenantId, req.organisationId);
-    const finalResponse = { ...taskUpdateDB };
+    const returnUpdatedTask = await prisma.task.update({
+        where: { taskId: taskId },
+        data: {
+            ...taskUpdateValue,
+            updatedByUserId: req.userId,
+        },
+        include: {
+            documentAttachments: { where: { deletedAt: null } },
+            assignedUsers: {
+                where: { deletedAt: null },
+            },
+            dependencies: {
+                include: {
+                    dependentOnTask: true,
+                },
+            },
+            project: true,
+            parent: {
+                where: { deletedAt: null },
+            },
+            subtasks: {
+                where: { deletedAt: null },
+            },
+        },
+    });
+    const endDate = await taskEndDate(returnUpdatedTask, req.tenantId, req.organisationId);
+    let finalResponse = { ...returnUpdatedTask, endDate };
+    if (returnUpdatedTask.parent) {
+        const parentEndDate = await taskEndDate(returnUpdatedTask.parent, req.tenantId, req.organisationId);
+        finalResponse = {
+            ...finalResponse,
+            parent: {
+                ...returnUpdatedTask.parent,
+                endDate: parentEndDate,
+            },
+        };
+    }
     return new SuccessResponse(StatusCodes.OK, finalResponse, "task updated successfully").send(res);
 };
 export const deleteTask = async (req, res) => {
@@ -385,15 +409,7 @@ export const deleteTask = async (req, res) => {
     });
     if (findtask.subtasks.length > 0) {
         for (const subTask of findtask.subtasks) {
-            await prisma.task.update({
-                where: {
-                    taskId: subTask.taskId,
-                },
-                data: {
-                    deletedAt: new Date(),
-                    taskName: `${subTask.taskName}_deleted_${otpValue}`,
-                },
-            });
+            await deleteSubtasks(subTask.taskId, subTask.taskName, otpValue, req.tenantId);
         }
     }
     return new SuccessResponse(StatusCodes.OK, null, "task deleted successfully").send(res);
@@ -715,6 +731,12 @@ export const addDependencies = async (req, res) => {
         throw new UnAuthorizedError("You are not authorized to add dependenices");
     }
     const { dependentType, dependendentOnTaskId } = dependenciesTaskSchema.parse(req.body);
+    if (findTask &&
+        (findTask.status == TaskStatusEnum.IN_PROGRESS ||
+            findTask.status == TaskStatusEnum.COMPLETED) &&
+        dependentType == TaskDependenciesEnum.PREDECESSORS) {
+        throw new BadRequestError("You can not add predecessors dependencies to Ongoing or Completed task.");
+    }
     const findDependencies = await prisma.taskDependencies.findFirst({
         where: {
             dependendentOnTaskId,

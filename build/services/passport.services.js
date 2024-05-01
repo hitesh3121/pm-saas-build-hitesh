@@ -3,6 +3,7 @@ import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import { UserProviderTypeEnum, UserStatusEnum } from "@prisma/client";
 import { settings } from "../config/settings.js";
 import { getClientByTenantId } from "../config/db.js";
+import { BrevoService } from "./brevo.services.js";
 const loginWithGoogle = new GoogleStrategy({
     clientID: settings.googleCredentials.clientId,
     clientSecret: settings.googleCredentials.clientSecret,
@@ -61,6 +62,13 @@ const loginWithGoogle = new GoogleStrategy({
                     },
                 },
             });
+            // Brevo API call
+            try {
+                await BrevoService.createOrUpdateContact(newUser.email, newUser.firstName ? newUser.firstName : "", newUser.lastName ? newUser.lastName : "");
+            }
+            catch (error) {
+                console.error(error);
+            }
             return done(null, {
                 ...newUser,
                 googleToken: token,

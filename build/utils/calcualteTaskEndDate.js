@@ -98,3 +98,31 @@ export const calculateDuration = async (startDate, endDate, tenantId, organisati
     }
     return duration;
 };
+export const getNextWorkingDay = async (inputDate, tenantId, organisationId) => {
+    const prisma = await getClientByTenantId(tenantId);
+    const orgDetails = await prisma.organisation.findFirst({
+        where: {
+            organisationId,
+            deletedAt: null,
+        },
+        select: {
+            nonWorkingDays: true,
+            orgHolidays: true,
+        },
+    });
+    const nonWorkingDays = orgDetails?.nonWorkingDays ?? [];
+    const holidays = orgDetails?.orgHolidays ?? [];
+    let endDate = new Date(inputDate);
+    endDate.setDate(endDate.getDate() + 1);
+    endDate.setUTCHours(0, 0, 0, 0);
+    let startDayOfWeek = endDate.getUTCDay();
+    let startDayAbbreviation = getDayAbbreviation(startDayOfWeek).toUpperCase();
+    while (nonWorkingDays.includes(startDayAbbreviation) ||
+        isHoliday(endDate, holidays)) {
+        endDate.setDate(endDate.getDate() + 1);
+        endDate.setUTCHours(0, 0, 0, 0);
+        startDayOfWeek = endDate.getUTCDay();
+        startDayAbbreviation = getDayAbbreviation(startDayOfWeek).toUpperCase();
+    }
+    return endDate;
+};
