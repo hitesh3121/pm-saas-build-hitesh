@@ -3,6 +3,11 @@ import { UserRoleEnum } from "@prisma/client";
 import * as TaskController from "../controllers/task.controller.js";
 import { roleMiddleware } from "../middleware/role.middleware.js";
 let router = express.Router();
+router.get("/mytasks", roleMiddleware([
+    UserRoleEnum.ADMINISTRATOR,
+    UserRoleEnum.PROJECT_MANAGER,
+    UserRoleEnum.TEAM_MEMBER,
+]), TaskController.allTaskOfUser);
 router.get("/taskAssignUsers/:projectId", roleMiddleware([
     UserRoleEnum.ADMINISTRATOR,
     UserRoleEnum.PROJECT_MANAGER,
@@ -85,8 +90,5 @@ router.post("/:projectId/:parentTaskId?", roleMiddleware([
     UserRoleEnum.PROJECT_MANAGER,
     UserRoleEnum.TEAM_MEMBER,
 ]), TaskController.createTask);
-router.put("/reAssignTaskToOtherUser/:projectId", roleMiddleware([
-    UserRoleEnum.ADMINISTRATOR,
-    UserRoleEnum.PROJECT_MANAGER,
-]), TaskController.reAssignTaskToOtherUser);
+router.put("/reAssignTaskToOtherUser/:projectId", roleMiddleware([UserRoleEnum.ADMINISTRATOR, UserRoleEnum.PROJECT_MANAGER]), TaskController.reAssignTaskToOtherUser);
 export default router;

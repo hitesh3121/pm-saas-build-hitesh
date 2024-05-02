@@ -956,3 +956,71 @@ export const reAssignTaskToOtherUser = async (req, res) => {
     }
     return new SuccessResponse(StatusCodes.OK, null, "Tasks reassigned successfully.").send(res);
 };
+export const allTaskOfUser = async (req, res) => {
+    const userId = req.userId;
+    const organisationId = req.organisationId;
+    if (!userId) {
+        throw new BadRequestError("userId not found!");
+    }
+    if (!organisationId) {
+        throw new BadRequestError("organisationId not found!!");
+    }
+    const prisma = await getClientByTenantId(req.tenantId);
+    const tasks = await prisma.task.findMany({
+        where: {
+            deletedAt: null,
+            OR: [
+                {
+                    assignedUsers: {
+                        some: {
+                            deletedAt: null,
+                            assginedToUserId: userId,
+                        },
+                    },
+                },
+                {
+                    createdByUserId: userId,
+                    deletedAt: null,
+                },
+            ],
+        },
+        orderBy: { createdAt: "desc" },
+        include: {
+            assignedUsers: {
+                where: { deletedAt: null },
+                select: {
+                    taskAssignUsersId: true,
+                    user: {
+                        select: selectUserFields,
+                    },
+                },
+            },
+            subtasks: {
+                where: { deletedAt: null },
+                include: {
+                    subtasks: {
+                        where: { deletedAt: null },
+                        include: {
+                            subtasks: true,
+                        },
+                    },
+                },
+            },
+            dependencies: true,
+        },
+    });
+    const finalArray = await Promise.all(tasks.map(async (task) => {
+        const endDate = await taskEndDate(task, req.tenantId, organisationId);
+        const completionPecentage = (await calculationSubTaskProgression(task, req.tenantId, organisationId)) ?? 0;
+        const { flag, delay } = await taskFlag(task, req.tenantId, organisationId);
+        const updatedTask = {
+            ...task,
+            flag,
+            delay,
+            endDate,
+            completionPecentage,
+        };
+        return updatedTask;
+    }));
+    return new SuccessResponse(StatusCodes.OK, finalArray, "get users task successfully").send(res);
+};
