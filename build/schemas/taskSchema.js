@@ -25,6 +25,7 @@ export const taskStatusSchema = z.object({
 });
 export const createCommentTaskSchema = z.object({
     commentText: z.string(),
+    parentCommentId: z.string().uuid().optional(),
 });
 export const attachmentTaskSchema = z.any();
 export const dependenciesTaskSchema = z

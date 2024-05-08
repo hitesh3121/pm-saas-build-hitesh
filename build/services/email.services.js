@@ -243,7 +243,7 @@ export class EmailService {
     static async sendDueTaskTemplate(email, nameOfUser, taskNamesString) {
         const subjectMessage = `ProjectChef: Task Due Today`;
         let message = `
-      Hello, ${nameOfUser}
+      Hello ${nameOfUser},
       
       Please note that these tasks are due today:
       Task ${taskNamesString} is due today.

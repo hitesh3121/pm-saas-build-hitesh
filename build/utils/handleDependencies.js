@@ -1,7 +1,7 @@
 import { TaskDependenciesEnum, TaskStatusEnum } from "@prisma/client";
 import { getClientByTenantId } from "../config/db.js";
 import { getNextWorkingDay, taskEndDate } from "./calcualteTaskEndDate.js";
-import { calculateDurationAndPercentage, updateSubtasks, updateSubtasksDependencies, } from "./taskRecursion.js";
+import { calculateDurationAndPercentage, updateSubtasksDependencies, } from "./taskRecursion.js";
 import { BadRequestError } from "../config/apiError.js";
 export const dependenciesManage = async (tenantId, organisationId, taskId, endDateCurr, userId) => {
     const prisma = await getClientByTenantId(tenantId);
@@ -106,7 +106,7 @@ export const addDependenciesHelper = async (taskId, dependendentOnTaskId, tenant
         dependencyOnTask &&
         (dependencyOnTask.status == TaskStatusEnum.IN_PROGRESS ||
             dependencyOnTask.status == TaskStatusEnum.COMPLETED)) {
-        throw new BadRequestError("You can not add on going or completed dependent task as successor dependency.");
+        throw new BadRequestError("You can not add on going or completed task as successor dependency.");
     }
     if (dependentType === TaskDependenciesEnum.PREDECESSORS) {
         if (latestTask.dependencies.some((obj) => obj.dependentType === TaskDependenciesEnum.PREDECESSORS)) {
@@ -128,7 +128,7 @@ export const addDependenciesHelper = async (taskId, dependendentOnTaskId, tenant
     let addDependencies1;
     let addDependencies2;
     if (dependentType == TaskDependenciesEnum.PREDECESSORS) {
-        const [value1, value2, value3] = await prisma.$transaction([
+        const [value1, value2] = await prisma.$transaction([
             prisma.taskDependencies.create({
                 data: {
                     dependentType: dependentType,
@@ -159,102 +159,13 @@ export const addDependenciesHelper = async (taskId, dependendentOnTaskId, tenant
                     },
                 },
             }),
-            prisma.task.update({
-                where: { taskId: taskId },
-                data: {
-                    startDate: new Date(endDateDependentTask),
-                    updatedByUserId: userId,
-                },
-                include: {
-                    documentAttachments: true,
-                    assignedUsers: true,
-                    dependencies: true,
-                    project: true,
-                    parent: true,
-                    subtasks: {
-                        where: { deletedAt: null },
-                        include: {
-                            subtasks: {
-                                where: { deletedAt: null },
-                                include: {
-                                    subtasks: true,
-                                },
-                            },
-                        },
-                    },
-                },
-            }),
         ]);
         addDependencies1 = value1;
         addDependencies2 = value2;
-        updatedTask = value3;
-        const endDateUpdatedTask = await taskEndDate(updatedTask, tenantId, organisationId);
-        if (value3 && value3.subtasks) {
-            await updateSubtasks(value3.subtasks, value3.startDate, userId, tenantId);
-        }
-        if (updatedTask.dependencies.length > 0) {
-            for (let obj of updatedTask.dependencies) {
-                if (obj.dependentType === TaskDependenciesEnum.SUCCESSORS) {
-                    const successorsTaskToUpdate = await prisma.task.findFirstOrThrow({
-                        where: { taskId: obj.dependendentOnTaskId, deletedAt: null },
-                        include: {
-                            documentAttachments: {
-                                where: { deletedAt: null },
-                            },
-                            subtasks: {
-                                where: { deletedAt: null },
-                                include: {
-                                    subtasks: {
-                                        where: { deletedAt: null },
-                                        include: {
-                                            subtasks: true,
-                                        },
-                                    },
-                                },
-                            },
-                            dependencies: {
-                                where: { deletedAt: null },
-                                include: {
-                                    dependentOnTask: true,
-                                },
-                            },
-                        },
-                    });
-                    if (successorsTaskToUpdate.startDate < new Date(endDateUpdatedTask)) {
-                        await prisma.task.update({
-                            where: {
-                                taskId: obj.dependendentOnTaskId,
-                            },
-                            data: {
-                                startDate: new Date(endDateUpdatedTask),
-                                updatedByUserId: userId,
-                            },
-                            include: {
-                                documentAttachments: true,
-                                assignedUsers: true,
-                                dependencies: true,
-                                project: true,
-                                parent: true,
-                                subtasks: {
-                                    where: { deletedAt: null },
-                                    include: {
-                                        subtasks: {
-                                            where: { deletedAt: null },
-                                            include: {
-                                                subtasks: true,
-                                            },
-                                        },
-                                    },
-                                },
-                            },
-                        });
-                    }
-                }
-            }
-        }
+        await helper(taskId, tenantId, organisationId, userId, endDateDependentTask);
     }
     else {
-        const [value1, value2, value3] = await prisma.$transaction([
+        const [value1, value2] = await prisma.$transaction([
             prisma.taskDependencies.create({
                 data: {
                     dependentType: dependentType,
@@ -285,46 +196,10 @@ export const addDependenciesHelper = async (taskId, dependendentOnTaskId, tenant
                     },
                 },
             }),
-            prisma.task.update({
-                where: { taskId: dependendentOnTaskId },
-                data: {
-                    startDate: new Date(endDateLatestTask),
-                    updatedByUserId: userId,
-                },
-                include: {
-                    documentAttachments: true,
-                    assignedUsers: true,
-                    dependencies: true,
-                    project: true,
-                    parent: true,
-                    subtasks: {
-                        where: { deletedAt: null },
-                        include: {
-                            subtasks: {
-                                where: { deletedAt: null },
-                                include: {
-                                    subtasks: true,
-                                },
-                            },
-                        },
-                    },
-                },
-            }),
         ]);
         addDependencies1 = value1;
         addDependencies2 = value2;
-        updatedTask = value3;
-        const endDateUpdatedTask = await taskEndDate(updatedTask, tenantId, organisationId);
-        if (value3 && value3.subtasks) {
-            await updateSubtasks(value3.subtasks, updatedTask.startDate, userId, tenantId);
-        }
-        if (updatedTask.dependencies.length > 0) {
-            for (let obj of updatedTask.dependencies) {
-                if (obj.dependentType === TaskDependenciesEnum.SUCCESSORS) {
-                    await dependenciesManage(tenantId, organisationId, obj.dependendentOnTaskId, new Date(endDateUpdatedTask), userId);
-                }
-            }
-        }
+        await helper(dependendentOnTaskId, tenantId, organisationId, userId, endDateLatestTask);
     }
     return [addDependencies1, addDependencies2];
 };
@@ -358,10 +233,10 @@ export const handleSubTaskUpdation = async (tenantId, organisationId, taskId, co
                     const endDateDependencyTask = new Date(await taskEndDate(dependencyTask, tenantId, organisationId));
                     if (startDate && endDateDependencyTask >= new Date(startDate)) {
                         if (currentTaskId === taskId) {
-                            throw new BadRequestError(`This task has an end to start dependency with ${dependencyTask.taskName}. Would you like to remove the dependency?`);
+                            throw new BadRequestError(`This task has a start to start dependency with ${dependencyTask.taskName}. Would you like to remove the dependency?`);
                         }
                         else {
-                            throw new BadRequestError(`This task or it's parent task has an end to start dependency with ${dependencyTask.taskName}. You can not chnage start date.`);
+                            throw new BadRequestError(`This task or it's parent task has a start to start dependency with ${dependencyTask.taskName}. You can not change start date.`);
                         }
                     }
                 }
@@ -423,5 +298,64 @@ export const detectCycleChild = async (taskId, tenantId, givenId) => {
                 await detectCycleChild(sub.taskId, tenantId, givenId);
             }
         }
+    }
+};
+export const helper = async (taskId, tenantId, organisationId, userId, newStartDate, canUpdateChild = true) => {
+    const prisma = await getClientByTenantId(tenantId);
+    const task = canUpdateChild
+        ? await prisma.task.update({
+            where: { taskId: taskId, deletedAt: null },
+            data: {
+                startDate: new Date(newStartDate),
+                updatedByUserId: userId,
+            },
+            include: {
+                dependencies: {
+                    include: {
+                        dependentOnTask: true,
+                    },
+                },
+                parent: {
+                    where: { deletedAt: null },
+                },
+                subtasks: {
+                    where: { deletedAt: null },
+                },
+            },
+        })
+        : await prisma.task.findFirstOrThrow({
+            where: { taskId: taskId },
+            include: {
+                dependencies: {
+                    include: {
+                        dependentOnTask: true,
+                    },
+                },
+                parent: {
+                    where: { deletedAt: null },
+                },
+                subtasks: {
+                    where: { deletedAt: null },
+                },
+            },
+        });
+    console.log(task.taskName, "----- updated");
+    const calculatedTaskEndDate = await taskEndDate(task, tenantId, organisationId);
+    if (task.dependencies) {
+        for (let dependency of task.dependencies) {
+            if (dependency.dependentType == TaskDependenciesEnum.SUCCESSORS) {
+                const nextWorkingStartDate = await getNextWorkingDay(new Date(calculatedTaskEndDate), tenantId, organisationId);
+                await helper(dependency.dependendentOnTaskId, tenantId, organisationId, userId, nextWorkingStartDate);
+            }
+        }
+    }
+    if (canUpdateChild && task.subtasks) {
+        for (let subtask of task.subtasks) {
+            await helper(subtask.taskId, tenantId, organisationId, userId, newStartDate);
+        }
+    }
+    if (task.parent?.taskId) {
+        await calculateDurationAndPercentage(task.parent.taskId, tenantId, organisationId);
+        helper(task.parent.taskId, tenantId, organisationId, userId, new Date(), false);
     }
 };

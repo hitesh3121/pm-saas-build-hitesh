@@ -17,7 +17,7 @@ import { calculateDurationAndPercentage, checkTaskStatus, deleteSubtasks, } from
 import { generateOTP } from "../utils/otpHelper.js";
 import { attachmentAddOrRemove, commentEditorDelete, dependenciesAddOrRemove, taskUpdateOrDelete, } from "../middleware/role.middleware.js";
 import { enumToString } from "../utils/enumToString.js";
-import { addDependenciesHelper, dependenciesManage, handleSubTaskUpdation, } from "../utils/handleDependencies.js";
+import { addDependenciesHelper, handleSubTaskUpdation, helper } from "../utils/handleDependencies.js";
 import { reAssginedTaskSchema } from "../schemas/organisationSchema.js";
 export const getTasks = async (req, res) => {
     if (!req.organisationId) {
@@ -78,8 +78,16 @@ export const getTaskById = async (req, res) => {
         where: { taskId: taskId, deletedAt: null },
         include: {
             comments: {
+                where: { parentCommentId: null },
                 orderBy: { createdAt: "desc" },
                 include: {
+                    childComments: {
+                        include: {
+                            commentByUser: {
+                                select: selectUserFields,
+                            },
+                        },
+                    },
                     commentByUser: {
                         select: selectUserFields,
                     },
@@ -156,6 +164,9 @@ export const createTask = async (req, res) => {
         });
         if (!parentTask) {
             throw new NotFoundError("Parent task not found");
+        }
+        if (parentTask && parentTask.milestoneIndicator) {
+            throw new NotFoundError("Cannot add subtasks to a milestone task.");
         }
         // Handle subtask not more then 3
         const countOfSubTasks = await prisma.task.calculateSubTask(parentTaskId);
@@ -262,14 +273,15 @@ export const updateTask = async (req, res) => {
             },
         },
     });
+    const endDateNew = await taskEndDate(taskUpdateDB, req.tenantId, req.organisationId);
+    // const dependentTaskStartDate = await getNextWorkingDay
     if (taskUpdateDB &&
         taskUpdateDB.dependencies &&
         taskUpdateDB.dependencies.length > 0) {
-        const endDate = await taskEndDate(taskUpdateDB, req.tenantId, req.organisationId);
         for (let dependantTask of taskUpdateDB.dependencies) {
             try {
                 if (dependantTask.dependentType === TaskDependenciesEnum.SUCCESSORS) {
-                    await dependenciesManage(req.tenantId, req.organisationId, dependantTask.dependendentOnTaskId, new Date(endDate), req.userId);
+                    await helper(dependantTask.dependendentOnTaskId, req.tenantId, req.organisationId, req.userId, new Date(endDateNew));
                 }
             }
             catch (error) {
@@ -280,6 +292,7 @@ export const updateTask = async (req, res) => {
     // Handle - parent- duration and end date
     if (taskUpdateDB.parent?.taskId) {
         await calculateDurationAndPercentage(taskUpdateDB.parent.taskId, req.tenantId, req.organisationId);
+        await helper(taskUpdateDB.parent?.taskId, req.tenantId, req.organisationId, req.userId, new Date(endDateNew), false);
     }
     // Project End Date  -  If any task's end date will be greater then It's own
     const maxEndDate = await calculateProjectEndDate(taskUpdateDB.projectId, req.tenantId, req.organisationId);
@@ -510,13 +523,14 @@ export const addComment = async (req, res) => {
         throw new BadRequestError("userId not found!!");
     }
     const taskId = uuidSchema.parse(req.params.taskId);
-    const { commentText } = createCommentTaskSchema.parse(req.body);
+    const { commentText, parentCommentId } = createCommentTaskSchema.parse(req.body);
     const prisma = await getClientByTenantId(req.tenantId);
     const comment = await prisma.comments.create({
         data: {
             taskId: taskId,
             commentByUserId: req.userId,
             commentText: commentText,
+            parentCommentId: parentCommentId,
         },
     });
     return new SuccessResponse(StatusCodes.CREATED, comment, "comment added successfully").send(res);
@@ -842,7 +856,10 @@ export const addOrRemoveMilesstone = async (req, res) => {
         data: {
             milestoneIndicator: milestoneIndicator,
             duration,
-            completionPecentage: 0, // If milestone then percentage will be 0 : 05-03-2024 - dev_hitesh
+            completionPecentage: 0, // If milestone then percentage will be 0 : 05-03-2024 - dev_hitesh,
+            parentTaskId: milestoneIndicator && findtask.parentTaskId
+                ? null
+                : findtask.parentTaskId, // If milestone then parentTaskId will be null : 06-05-2024 - dev_hitesh,
         },
         where: {
             taskId: taskId,
