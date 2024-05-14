@@ -216,7 +216,7 @@ export const dashboardAPI = async (req, res) => {
         labels: Object.keys(overallSituationCounts),
         data: Object.values(overallSituationCounts),
     };
-    const labels = ["Significant delay", "On track", "Moderate delay"];
+    const labels = ["Significant delay", "On time", "Moderate delay"];
     const data = [0, 0, 0];
     const projects = await Promise.all(projectManagersProjects.map(async (project) => {
         const CPI = await calculationCPI(project, req.tenantId, organisationId);

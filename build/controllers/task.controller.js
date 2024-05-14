@@ -8,7 +8,7 @@ import { AwsUploadService } from "../services/aws.services.js";
 import { uuidSchema } from "../schemas/commonSchema.js";
 import { HistoryTypeEnumValue } from "../schemas/enums.js";
 import { removeProperties } from "../types/removeProperties.js";
-import { taskEndDate } from "../utils/calcualteTaskEndDate.js";
+import { getNextWorkingDay, taskEndDate } from "../utils/calcualteTaskEndDate.js";
 import { selectUserFields } from "../utils/selectedFieldsOfUsers.js";
 import { calculationSubTaskProgression } from "../utils/calculationSubTaskProgression.js";
 import { taskFlag } from "../utils/calculationFlag.js";
@@ -274,14 +274,14 @@ export const updateTask = async (req, res) => {
         },
     });
     const endDateNew = await taskEndDate(taskUpdateDB, req.tenantId, req.organisationId);
-    // const dependentTaskStartDate = await getNextWorkingDay
+    const dependentTaskStartDate = await getNextWorkingDay(new Date(endDateNew), req.tenantId, req.organisationId);
     if (taskUpdateDB &&
         taskUpdateDB.dependencies &&
         taskUpdateDB.dependencies.length > 0) {
         for (let dependantTask of taskUpdateDB.dependencies) {
             try {
                 if (dependantTask.dependentType === TaskDependenciesEnum.SUCCESSORS) {
-                    await helper(dependantTask.dependendentOnTaskId, req.tenantId, req.organisationId, req.userId, new Date(endDateNew));
+                    await helper(dependantTask.dependendentOnTaskId, req.tenantId, req.organisationId, req.userId, new Date(dependentTaskStartDate));
                 }
             }
             catch (error) {
@@ -292,7 +292,7 @@ export const updateTask = async (req, res) => {
     // Handle - parent- duration and end date
     if (taskUpdateDB.parent?.taskId) {
         await calculateDurationAndPercentage(taskUpdateDB.parent.taskId, req.tenantId, req.organisationId);
-        await helper(taskUpdateDB.parent?.taskId, req.tenantId, req.organisationId, req.userId, new Date(endDateNew), false);
+        await helper(taskUpdateDB.parent?.taskId, req.tenantId, req.organisationId, req.userId, new Date(dependentTaskStartDate), false);
     }
     // Project End Date  -  If any task's end date will be greater then It's own
     const maxEndDate = await calculateProjectEndDate(taskUpdateDB.projectId, req.tenantId, req.organisationId);

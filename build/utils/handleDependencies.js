@@ -339,7 +339,6 @@ export const helper = async (taskId, tenantId, organisationId, userId, newStartD
                 },
             },
         });
-    console.log(task.taskName, "----- updated");
     const calculatedTaskEndDate = await taskEndDate(task, tenantId, organisationId);
     if (task.dependencies) {
         for (let dependency of task.dependencies) {
