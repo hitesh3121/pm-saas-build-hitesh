@@ -1,3 +1,4 @@
+import { TaskStatusEnum } from "@prisma/client";
 import { getClientByTenantId } from "../config/db.js";
 import { getDayAbbreviation } from "./getDatAbbreviation.js";
 import { isHoliday } from "./checkIsHoliday.js";
@@ -8,7 +9,7 @@ export async function calculationTPI(task, tenantId, organisationId) {
     const completionPecentage = (await calculationSubTaskProgression(task, tenantId, organisationId)) ?? 0;
     const currentDate = new Date();
     const taskStartDate = new Date(startDate);
-    if (currentDate <= taskStartDate) {
+    if (currentDate <= taskStartDate || status == TaskStatusEnum.NOT_STARTED) {
         return {
             tpiValue: 1,
             tpiFlag: "Green",

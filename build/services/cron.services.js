@@ -100,9 +100,9 @@ export class CronService {
                     }
                     let taskNamesString = "";
                     for (let i = 0; i < dueTodayTasks.length; i++) {
-                        taskNamesString += `'${dueTodayTasks[i]}'`;
+                        taskNamesString += `${i + 1}. ${dueTodayTasks[i]}`;
                         if (i < dueTodayTasks.length - 1) {
-                            taskNamesString += ", ";
+                            taskNamesString += `, `;
                         }
                     }
                     if (dueTodayTasks.length > 0) {

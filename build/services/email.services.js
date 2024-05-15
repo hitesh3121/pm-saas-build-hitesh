@@ -266,11 +266,10 @@ export class EmailService {
                   <td>
                     <h1 style="text-align:center;color:#7a310d;margin-bottom:40px">ProjectChef</h1>
                     <h1 style="color:#808080;font-size:15px;font-family:HelveticaNeue,Helvetica,Arial,sans-serif;letter-spacing:0;line-height:23px;padding:0 40px;margin:0;text-align:left">Task due</h1>
-                    <p style="font-size:15px;line-height:23px;margin:0;color:#808080;font-family:HelveticaNeue,Helvetica,Arial,sans-serif;letter-spacing:0;padding:0 40px;text-align:left;margin-top:10px"> <!-- -->Hello, ${nameOfUser}</p>
+                    <p style="font-size:15px;line-height:23px;margin:0;color:#808080;font-family:HelveticaNeue,Helvetica,Arial,sans-serif;letter-spacing:0;padding:0 40px;text-align:left;margin-top:10px"> <!-- -->Hello ${nameOfUser}</p>
                     <p style="font-size:15px;line-height:23px;margin:0;color:#808080;font-family:HelveticaNeue,Helvetica,Arial,sans-serif;letter-spacing:0;padding:0 40px;text-align:left;margin-top:10px"> <!-- -->Please note that these tasks are due today:</p>
                     <p style="font-size:15px;line-height:23px;margin:0;color:#808080;font-family:HelveticaNeue,Helvetica,Arial,sans-serif;letter-spacing:0;padding:0 40px;text-align:left;margin-top:10px"> <!-- -->Task ${taskNamesString} is due today.</p>
-                    <p style="font-size:15px;line-height:23px;margin:0;color:#808080;font-family:HelveticaNeue,Helvetica,Arial,sans-serif;letter-spacing:0;padding:0 40px;text-align:center;margin-top:50px">Need help? </p>
-                    <p style="font-size:15px;line-height:23px;margin:0;color:#808080;font-family:HelveticaNeue,Helvetica,Arial,sans-serif;letter-spacing:0;padding:0 40px;text-align:center;margin-bottom:50px">Ask at<!-- --> <a href="mailto:support@projectchef" style="color:#444;text-decoration:underline" target="_blank">support@projectchef</a></p>
+                    <p style="font-size:15px;line-height:23px;margin:0 0 20px 0;color:#808080;font-family:HelveticaNeue,Helvetica,Arial,sans-serif;letter-spacing:0;padding:0 40px;text-align:left;margin-top:10px"> <!-- --><a href="https://app.projectchef.io/mytasks?todayDueDays=true" style="color:#444;text-decoration:underline" target="_blank">See tasks</a></p>
                   </td>
                 </tr>
               </tbody>
